@@ -65,7 +65,7 @@ The helper unlinks an owned run's internal symlinks and closed FIFO/socket nodes
 
 When the user asks to clean Cache, `temp-*`, all Codex projects, or the whole computer, follow [Cache cleanup](references/cache-cleanup.md). Match the requested scope, enumerate exact runs and consumers, then delete only confirmed disposable Skill-generated support. A running project or chat protects only resources it still uses; completed earlier runs may be cleaned immediately. An explicit cleanup request covers eligible legacy `Cache/temp-*` directly; no migration or routine confirmation is required.
 
-When the user requests daily cleanup, configure one local schedule and use the [multi-project sweep](references/cache-cleanup.md#daily-multi-project-sweep). Run the first sweep immediately if requested. Continue independent tasks after the current project's checkpoint and report exact pending owners separately.
+For opted-in daily cleanup at task start, use the [multi-project sweep](references/cache-cleanup.md#daily-multi-project-sweep) on the first local Codex task of the day. Check the saved date before project discovery. Continue the task after the sweep or an already-checked result, and report exact pending owners separately.
 
 ## Git branch ownership
 

@@ -129,7 +129,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "sweep",
           "anchor": "def sweep(project_roots, task_id, *, apply=False, budget_seconds=30):",
-          "summary": "Deduplicate selected project and Cache directory identities, apply guarded checkpoints, and inventory unregistered Cache without refreshing other projects' AI indexes."
+          "summary": "Apply guarded checkpoints to distinct project identities and inventory legacy Cache. The first-task entry uses sweep_once_per_day to lock the host's local date."
         },
         {
           "id": "cache-retention-contract-test",

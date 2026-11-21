@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Opportunistic, identity-bound cleanup of registered disposable task runs.
 
-This is a local resource registry, not task memory or a scheduler. Invoke a
-checkpoint at task boundaries or sweep selected projects from a daily schedule.
-Discovery never makes an unknown Cache disposable.
+Invoke a checkpoint at task boundaries or sweep selected projects when the
+day's first local Codex task begins. Discovery never makes an unknown Cache
+disposable.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import subprocess
 import sys
 import time
 import uuid
+from datetime import date
 from pathlib import Path
 
 import task_artifact_paths as artifacts
@@ -1462,6 +1463,68 @@ def sweep(project_roots, task_id, *, apply=False, budget_seconds=30):
             "pending_count": pending + len(errors) + sum(len(project["errors"]) for project in projects)}
 
 
+def _daily_sweep_state_path():
+    home = Path.home()
+    if sys.platform == "darwin":
+        state_root = home / "Library" / "Application Support"
+    elif os.name == "nt":
+        state_root = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
+    else:
+        configured = Path(os.environ.get("XDG_STATE_HOME", ""))
+        state_root = configured if configured.is_absolute() else home / ".local" / "state"
+    return state_root / "qin-codex-skills" / "cache-sweep-day"
+
+
+def daily_sweep_status():
+    """Read the host's completed local date without creating files or scanning projects."""
+    state = _daily_sweep_state_path()
+    today = date.today().isoformat()
+    artifacts._check_ancestors(state.parent)
+    try:
+        if not stat.S_ISREG(_safe_stat(state).st_mode):
+            raise ValueError("daily Cache sweep state must be a regular file")
+        with state.open("rb") as stream:
+            checked = stream.read(16) == (today + "\n").encode("ascii")
+    except FileNotFoundError:
+        checked = False
+    return {"daily_status": "already-checked" if checked else "due", "local_date": today}
+
+
+def sweep_once_per_day(project_roots, task_id, *, budget_seconds=30):
+    """Run an opted-in sweep at most once per local day across Codex tasks."""
+    state = _daily_sweep_state_path()
+    artifacts._check_ancestors(state.parent)
+    state.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    artifacts._check_ancestors(state.parent)
+    descriptor = os.open(state, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(descriptor, "r+b") as stream:
+        named = _safe_stat(state)
+        if not stat.S_ISREG(named.st_mode) or named.st_nlink != 1 or _identity(named) != _identity(os.fstat(stream.fileno())):
+            raise ValueError("daily Cache sweep state identity changed")
+        today = date.today().isoformat()
+        marker = (today + "\n").encode("ascii")
+        try:
+            _native_file_lock(stream, True)
+        except OSError as error:
+            if error.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                raise
+            return {"daily_status": "in-progress", "local_date": today, "applied": False}
+        try:
+            if stream.read(16) == marker:
+                return {"daily_status": "already-checked", "local_date": today, "applied": False}
+            result = sweep(project_roots, task_id, apply=True, budget_seconds=budget_seconds)
+            if result["errors"] and not result["projects"]:
+                return {**result, "daily_status": "pending", "local_date": today}
+            stream.seek(0)
+            stream.write(marker)
+            stream.truncate()
+            stream.flush()
+            os.fsync(stream.fileno())
+            return {**result, "daily_status": "checked", "local_date": today}
+        finally:
+            _native_file_lock(stream, False)
+
+
 def _remote_owner_review(cache, project):
     """Inventory direct remote names without inferring ownership or deletion consent."""
     if not cache.exists() and not cache.is_symlink():
@@ -1522,8 +1585,8 @@ def discover(search_roots, *, project_root, artifact_root=None, apply=False, lim
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("discover", "scan", "register", "plan", "touch", "release-retention", "checkpoint", "sweep"))
-    parser.add_argument("--project-root", type=Path, required=True, action="append", help="Repeat only for a multi-project sweep")
+    parser.add_argument("command", choices=("discover", "scan", "register", "plan", "touch", "release-retention", "checkpoint", "sweep", "daily-status"))
+    parser.add_argument("--project-root", type=Path, action="append", default=[], help="Repeat only for a multi-project sweep")
     parser.add_argument("--artifact-root", type=Path)
     parser.add_argument("--task-id")
     parser.add_argument("--run-root", type=Path)
@@ -1539,9 +1602,17 @@ def main():
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--requested-only", action="store_true", help="Close only explicit finished/obsolete runs, for nested owners and test fixtures")
     parser.add_argument("--skip-cache-index", action="store_true", help="Register a reviewed legacy run without refreshing another project's AI index")
+    parser.add_argument("--once-per-day", action="store_true", help="Run an applied sweep once on the first local task of the day")
     parser.add_argument("--budget-seconds", type=float, default=30)
     args = parser.parse_args()
     try:
+        if args.once_per_day and (args.command != "sweep" or not args.apply):
+            raise ValueError("--once-per-day requires sweep --apply")
+        if args.command == "daily-status":
+            print(json.dumps(daily_sweep_status(), sort_keys=True))
+            return 0
+        if not args.project_root and not args.once_per_day:
+            raise ValueError("this command requires --project-root")
         if args.requested_only and args.command != "checkpoint":
             raise ValueError("--requested-only applies only to checkpoint")
         if args.skip_cache_index and args.command != "register":
@@ -1553,9 +1624,12 @@ def main():
                 raise ValueError("sweep uses the project Cache and default legacy registry; check exact custom stores separately")
             if args.current_run is not None or args.obsolete_run or args.phase != "start":
                 raise ValueError("use checkpoint for exact run transitions")
-            result = sweep(args.project_root, args.task_id, apply=args.apply, budget_seconds=args.budget_seconds)
+            if args.once_per_day:
+                result = sweep_once_per_day(args.project_root, args.task_id, budget_seconds=args.budget_seconds)
+            else:
+                result = sweep(args.project_root, args.task_id, apply=args.apply, budget_seconds=args.budget_seconds)
             print(json.dumps(result, sort_keys=True))
-            return 2 if result["pending_count"] else 0
+            return 2 if result.get("pending_count") else 0
         if len(args.project_root) != 1:
             raise ValueError("multiple project roots require sweep")
         args.project_root = args.project_root[0]

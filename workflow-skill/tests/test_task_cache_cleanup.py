@@ -10,6 +10,7 @@ import tempfile
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -459,6 +460,46 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         receipt = cleanup.sweep([other_project], "daily-cache-cleanup", apply=True)
         self.assertEqual(receipt["directories_deleted"], 1, receipt)
         self.assertFalse(legacy.exists())
+
+    def test_daily_sweep_runs_at_first_task_and_skips_missed_days(self):
+        first = self.run_root("first-build")
+        later = self.run_root("later-build")
+        state = self.root / "daily-state" / "cache-sweep-day"
+        cleanup.touch_run(self.project, "first-build", first, state="complete")
+
+        with mock.patch.object(cleanup, "_daily_sweep_state_path", return_value=state), mock.patch.object(cleanup, "date") as clock, mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+            clock.today.return_value = date(2026, 11, 20)
+            self.assertEqual(cleanup.daily_sweep_status()["daily_status"], "due")
+            self.assertFalse(state.exists())
+            missing = cleanup.sweep_once_per_day([self.root / "unavailable"], "first-task")
+            self.assertEqual(missing["daily_status"], "pending", missing)
+            self.assertEqual(cleanup.daily_sweep_status()["daily_status"], "due")
+
+            with state.open("r+b") as stream:
+                cleanup._native_file_lock(stream, True)
+                try:
+                    running = cleanup.sweep_once_per_day([self.project], "concurrent-task")
+                    self.assertEqual(running["daily_status"], "in-progress", running)
+                    self.assertTrue(first.exists())
+                finally:
+                    cleanup._native_file_lock(stream, False)
+
+            receipt = cleanup.sweep_once_per_day([self.project], "first-task")
+            self.assertEqual(receipt["directories_deleted"], 1, receipt)
+            self.assertEqual(receipt["local_date"], "2026-11-20")
+            self.assertFalse(first.exists())
+
+            cleanup.touch_run(self.project, "later-build", later, state="complete")
+            skipped = cleanup.sweep_once_per_day([self.project], "same-day-task")
+            self.assertEqual(skipped["daily_status"], "already-checked", skipped)
+            self.assertTrue(later.exists())
+
+            clock.today.return_value = date(2026, 11, 24)
+            self.assertEqual(cleanup.daily_sweep_status()["daily_status"], "due")
+            receipt = cleanup.sweep_once_per_day([self.project], "next-task-after-days-away")
+            self.assertEqual(receipt["directories_deleted"], 1, receipt)
+            self.assertFalse(later.exists())
+            self.assertEqual(state.read_text(encoding="ascii"), "2026-11-24\n")
 
     def test_local_registry_uses_temp_name_and_preserves_legacy_live_owner(self):
         first = self.run_root()
