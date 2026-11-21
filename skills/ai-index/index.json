@@ -324,7 +324,7 @@
           "file": "code-skill/scripts/qin_rule_guard_common.py",
           "symbol": "git_added_lines",
           "anchor": "def git_added_lines(path, reference):",
-          "summary": "Resolve actual changed lines identically for the Python and C# source checkers."
+          "summary": "Resolve actual changed lines for source checkers."
         },
         {
           "id": "method-philosophy-contract-test",

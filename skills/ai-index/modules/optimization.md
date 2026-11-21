@@ -1,6 +1,6 @@
 # Optimization
 
-Start at [SKILL.md](../../../optimization-skill/SKILL.md). [skill_optimizer.py](../../../optimization-skill/scripts/skill_optimizer.py) and [audit_global_skills.py](../../../optimization-skill/scripts/audit_global_skills.py) are the relevant helper entry points; select the one matching the requested audit/optimization.
+Start at [SKILL.md](../../../optimization-skill/SKILL.md). [skill_optimizer.py](../../../optimization-skill/scripts/skill_optimizer.py) and [audit_global_skills.py](../../../optimization-skill/scripts/audit_global_skills.py) are the relevant helper entry points; select the one matching the requested audit/optimization. Menu-path hints use the menu text from the instruction and work across applications.
 
 For a Skill entrypoint audit, compare discovery triggers, required steps, exceptions, permissions, evidence and owner links before and after. Use `skill_optimizer.py verify` for each affected Skill's references and scripts, and the [release gate](testing-release.md) for candidate and isolated-installation acceptance when delivering global Skills.
 

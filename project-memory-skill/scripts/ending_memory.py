@@ -153,9 +153,12 @@ def closeout(payload, *, project_root, store=None, vault=None):
             return {"status": "pending", "reason": setup.get("reason", "obsidian_vault_unavailable"),
                     "written": False, "vault": setup.get("vault")}
         resolved_vault = Path(setup["vault"])
-    project = memory._project_identity(root)
+    try:
+        project = memory._project_identity(root)
+        state = knowledge.load_knowledge(root, resolved_vault)
+    except memory.ProjectOwnerRegistryUnavailable as error:
+        return {"status": "pending", "reason": "project_owner_registry_unavailable", "detail": str(error), "written": False}
     owner = project.get("owner") or root.name
-    state = knowledge.load_knowledge(root, resolved_vault)
     if not has_facts:
         if not any(entry["status"] == "current" for entry in state["entries"]):
             return {"status": "skipped", "reason": "no_durable_information", "maintenance_due": False}

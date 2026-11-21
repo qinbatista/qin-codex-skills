@@ -80,12 +80,6 @@ Measure a representative batch first. Read once at the owner's batch boundary wh
 
 ## Check an installation and publish source
 
-> Use Management to verify both Skill packs on this machine. For a repository change, select the maintained files, run its release checks and read back the delivered commit.
+> Use Management to verify an installed Skill pack on this machine. For a repository change, select the maintained files, run its release checks and read back the delivered commit.
 
 Codex discovers the grouped install at `~/.agents/skills/<pack>/<skill>/SKILL.md`. Check the package manifest, each direct Skill entry, and the released files. Use the installer action `update` to replace that package and `uninstall` to remove it. If you are migrating an older Marketplace copy, verify the new install before removing the previous plugin and marketplace entries with `codex plugin remove <pack>@<pack>` and `codex plugin marketplace remove <pack>`. [Installation and delivery](../../../management-skill/SKILL.md#install) · [Codex Skill discovery](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)
-
-## Use both packs on a Unity task
-
-> Read this Unity project's rules and use the matching Skills to repair a Charge button that admits a second request while its animation is playing. Verify the actual input and replay path.
-
-Use the Codex pack to define the result, navigate ownership, manage scratch and verify delivery. Use the Unity pack for the controller, UI binding, playback and native test decisions. Follow the receiving project's registered workflow when applicable. [Unity Skill pack](https://github.com/qinbatista/qin-unity-skills#examples) · [Charge Pulse project](https://github.com/qinbatista/qin-unity-skills/tree/master/examples/charge-pulse)

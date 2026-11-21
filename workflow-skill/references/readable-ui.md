@@ -1,6 +1,6 @@
 # Readable UI and visual presentation
 
-Apply these preferences to UI and visual tasks: games, apps, websites, dashboards, tools, PDFs, documents and slides, even with no code changes or when another Skill renders/exports. Read relevant project memory first; skip absent notes. Keep project content and style with its project.
+Apply these preferences to UI and visual tasks across interactive apps, websites, dashboards, tools, PDFs, documents and slides, even with no code changes or when another Skill renders/exports. Read relevant project memory first; skip absent notes. Keep project content and style with its project.
 
 ## Twelve basic principles
 

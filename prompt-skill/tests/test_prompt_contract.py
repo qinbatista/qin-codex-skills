@@ -37,7 +37,7 @@ class PromptContractTests(unittest.TestCase):
             self.assertIn(concept, self.skill)
 
     def test_format_semantics_and_code_interpolation_are_separate(self):
-        for concept in ("Schema", "allowed missing values", "cross-field consistency", "Each reference's role", "checkerboard is not alpha", "sprite-specific restrictions"):
+        for concept in ("Schema", "allowed missing values", "cross-field consistency", "Each reference's role", "checkerboard is not alpha", "when the receiving asset requires them"):
             self.assertIn(concept, self.skill)
         for concept in ("{{", "}}", "{source_text}", "actual language version", "active task", "Do not defer validation to Ending"):
             self.assertIn(concept, self.code_reference)

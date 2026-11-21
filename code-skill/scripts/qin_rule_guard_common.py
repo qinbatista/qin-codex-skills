@@ -1,4 +1,4 @@
-"""Shared result and Git line-scope helpers for the Python and C# source checkers."""
+"""Shared findings and Git line scopes for source checkers."""
 
 import re
 import subprocess

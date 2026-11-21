@@ -39,7 +39,7 @@ Preserve unrelated edits, installed Skills and private history. Verify changed b
 
 ### Promote rules without multiplying owners
 
-For authorized cross-project audits, promote a rule only with evidence from distinct consumers or an explicit global preference. Keep product identifiers, gameplay values, provider configuration, incidents and acceptance records with their project owners.
+For authorized cross-project audits, promote a rule only with evidence from distinct consumers or an explicit global preference. Keep product identifiers, configuration values, provider settings, incidents and acceptance records with their project owners.
 
 Extend an existing Skill or focused reference first. Code owns state, lifecycle and side effects. Verify owns acceptance evidence. Workflow owns coordination, Git, browser surfaces and resources. Project Memory owns durable knowledge. Link to the owner and add only local constraints. Remove copied procedures when consolidating. Keep one source definition across installations and add project adapters only for real domain contracts.
 
@@ -47,7 +47,7 @@ Check helpers, installers, validators and tests for superseded behavior. Update 
 
 ## Install
 
-For `qin-codex-skills` and `qin-unity-skills`, use [install_skill_pack.py](scripts/install_skill_pack.py) with `install`, `update` or `uninstall` and the pack name. It installs each Skill directly inside its group from the published archive and updates the whole group. Resolve helpers relative to the loaded Skill or its siblings.
+For a supported pack, use [install_skill_pack.py](scripts/install_skill_pack.py) with `install`, `update` or `uninstall` and the pack name. It installs each Skill directly inside its group from the published archive and updates the whole group. Resolve helpers relative to the loaded Skill or its siblings.
 
 Use `~/.agents/skills` for standalone user Skills. Resolve `CODEX_HOME` (default `~/.codex`) for configuration, global `AGENTS.md`, plugins and system resources. Preserve `.system`, plugin resources and unique content. Verify the destination before retiring an authorized legacy copy.
 

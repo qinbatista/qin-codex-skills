@@ -28,14 +28,12 @@ Check `~/.agents/skills/qin-codex-skills/<skill>/SKILL.md` and select `$code-ski
 | --- | --- | --- |
 | [Task Analyze](task-analyze-skill/SKILL.md) | Defines the result and follows work through delivery. | [Fix a CSV import](management-skill/assets/readme/examples.md#define-the-finish-line) |
 | [Workflow](workflow-skill/SKILL.md) | Coordinates execution, recovery and cleanup. | [Retry a build or test](management-skill/assets/readme/examples.md#retry-a-build-or-test) |
-| [Code](code-skill/SKILL.md) | Guides ownership, structure and portable code. | [Write Python](management-skill/assets/readme/examples.md#write-a-python-input-boundary) · [Organize a project](management-skill/assets/readme/examples.md#organize-a-project) |
+| [Code](code-skill/SKILL.md) | Guides ownership, structure and portable code. | [Write Python](management-skill/assets/readme/examples.md#write-a-python-input-boundary) · [Organize a project](management-skill/assets/readme/examples.md#organize-a-project) · [Replay the Python coding tests](https://github.com/qinbatista/qin-codex-skills/blob/master/.agents/skills/testing-skill/references/codex-python-writing.md) |
 | [Prompt](prompt-skill/SKILL.md) | Specifies repeatable AI behavior and output. | [Define a JSON response](management-skill/assets/readme/examples.md#specify-a-prompt-response) |
 | [Verify](verify-skill/SKILL.md) | Checks the actual behavior or output. | [Exercise the importer](management-skill/assets/readme/examples.md#verify-the-real-entry-point) |
 | [Project Memory](project-memory-skill/SKILL.md) | Recalls and records durable project facts in Obsidian. | [Recall a method contract](management-skill/assets/readme/examples.md#recall-and-record-project-decisions) |
 | [Optimization](optimization-skill/SKILL.md) | Improves a selected path and measures the gain. | [Measure batch parsing](management-skill/assets/readme/examples.md#measure-an-optimization) |
 | [Management](management-skill/SKILL.md) | Maintains AI indexes, installations and release checks. | [Verify and deliver a pack](management-skill/assets/readme/examples.md#check-an-installation-and-publish-source) |
-
-For Unity work, install the [Unity Skill pack](https://github.com/qinbatista/qin-unity-skills) alongside this one. [See how both packs work together](management-skill/assets/readme/examples.md#use-both-packs-on-a-unity-task).
 
 ## Task flow
 

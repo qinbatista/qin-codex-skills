@@ -74,6 +74,11 @@ class SkillOptimizerPlatformTests(unittest.TestCase):
         warnings = OPTIMIZER.build_warnings("Use for bounded edits. Preserve scope and check the changed output.\n", [], [])
         self.assertEqual([], warnings)
 
+    def test_menu_hints_use_the_application_labels(self):
+        lines = ["Use Workspace > Arrange Windows.", "Use file > open.", "Use `catalog > filters`.", "Keep the result when size > limit."]
+        candidates = OPTIMIZER.find_script_candidates("\n".join(lines))
+        self.assertEqual([candidate.line_text for candidate in candidates], lines[:3])
+
     def test_duplicate_rules_are_still_reported_without_heading_checks(self):
         duplicate = OPTIMIZER.DuplicateInstruction([2, 3], "Keep a clear ownership boundary.")
         warnings = OPTIMIZER.build_warnings("# Skill\n", [], [duplicate])

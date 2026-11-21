@@ -2,6 +2,10 @@
 
 Start at the [project testing Skill](../../../.agents/skills/testing-skill/SKILL.md), [test registry](../../../.agents/skills/testing-skill/references/test-registry.json) and [audit_registry.py](../../../.agents/skills/testing-skill/scripts/audit_registry.py). They own stable test purpose, goal, level, relative path, runner and Skill ownership; results remain in the current project Cache run.
 
+The project testing Skill owns the opt-in [Codex Python writing cases](../../../.agents/skills/testing-skill/references/codex-python-writing.md) and [replay command](../../../.agents/skills/testing-skill/scripts/replay_python_writing.py). Each case checks an independent answer against actual files or database state.
+
+The [resource ledger tests](../../../workflow-skill/tests/test_task_resource_ledger.py) replace an ownership marker with a distinct file carrying the original bytes and timestamp.
+
 Each global Skill's clean-clone tests stay in that Skill's `tests/`. Project-only tests stay under the project testing Skill. Consolidate by purpose before adding cases; retain distinct compatibility and release coverage. Apply [verification rules](../rules/verification.md).
 
 The [GitHub Actions validation matrix](../../../.github/workflows/ci.yml) tests Python 3.10 and 3.11 on `ubuntu-latest`. Python 3.10 covers the existing syntax floor for the host scripts, including structural pattern matching in platform dispatch. `candidate_layouts` includes the workflow in the isolated source layout so the project AI index can validate its ownership and links.

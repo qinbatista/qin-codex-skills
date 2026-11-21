@@ -7,7 +7,6 @@ Use this reference when `verify-skill` needs to judge whether visible output is 
 - [Core Procedure](#core-procedure)
 - [Universal Blockers](#universal-blockers)
 - [Web, App, And Product UI](#web-app-and-product-ui)
-- [Games And Playable Scenes](#games-and-playable-scenes)
 - [Documents, PDFs, Reports, And Slides](#documents-pdfs-reports-and-slides)
 - [Images, Artwork, And Generated Visual Assets](#images-artwork-and-generated-visual-assets)
 - [Verification Output](#verification-output)
@@ -15,8 +14,8 @@ Use this reference when `verify-skill` needs to judge whether visible output is 
 ## Core Procedure
 
 1. Read the user's visual context first: audience, domain, output type, target platform, style references, brand constraints, intended mood, accessibility constraints, and what must stay consistent with prior work.
-2. Capture real evidence before judging: screenshot, browser viewport, rendered PDF page, slide export, gameplay capture, image output, or supplied reference. Do not accept code-only inspection for a visual claim when rendering is practical.
-3. Choose the artifact standard below. Combine standards when the output is mixed, such as a report dashboard exported to PDF.
+2. Capture real evidence before judging: screenshot, browser viewport, rendered PDF page, slide export, screen recording, image output, or supplied reference. Do not accept code-only inspection for a visual claim when rendering is practical.
+3. Choose the artifact standard below and the receiving project's relevant visual criteria. Combine standards for mixed outputs such as a dashboard exported to PDF.
 4. Compare against any available baseline: previous screenshot, reference image, existing design system, brand guide, golden file, user sample, or prior generated artifact.
 5. Return `pass`, `warning`, or `fail`, with the evidence path/state, selected standard, observed issue, and why it matters.
 
@@ -27,9 +26,9 @@ Fail or repair before passing when any of these affect the requested outcome:
 - text is clipped, overlapping, unreadable, or too small for the target medium
 - controls wrap, collide, drift out of alignment, or lose their hit area
 - contrast is insufficient for normal use or required accessibility
-- layout breaks at a required viewport, page size, export size, or gameplay camera scale
+- layout breaks at a required viewport, page size, export size, or viewing scale
 - the visual style ignores user-provided background, references, brand, or platform context
-- decorative media replaces required product, gameplay, document, or data evidence
+- decorative media replaces required product, document, or data evidence
 - the result only looks acceptable in a static crop while the live state, page, animation, or document render fails
 
 ## Web, App, And Product UI
@@ -51,23 +50,6 @@ Check:
 - interactive states, loading, empty, disabled, error, hover, focus, and selected states are present when the user can encounter them
 - images and icons support the actual product/task, not generic decoration
 - visual decisions preserve the existing app style unless the user requested a redesign
-
-## Games And Playable Scenes
-
-Judge games by gameplay readability and feel, not by static website beauty. A pretty screenshot fails if it hides gameplay information or makes play worse.
-
-Check:
-
-- the player, hazards, goals, interactables, pickups, projectiles, and navigation cues are readable at real gameplay scale
-- HUD text, meters, buttons, prompts, and scores do not block action and remain legible during motion
-- camera framing shows enough anticipation space and does not crop important actors
-- art direction is cohesive across sprites, lighting, particles, UI, menus, and environment
-- animation, hit feedback, damage states, transitions, and sound/visual cues communicate cause and effect
-- controls and input response feel consistent with the genre and target platform
-- performance-sensitive effects do not flood the screen, obscure action, or cause visible stutter
-- menus, pause state, fail state, win state, and restart flow are usable if they are part of the requested work
-
-Evidence should include an in-game screenshot or capture from a real play/editor state when practical, not only an asset file viewed alone.
 
 ## Documents, PDFs, Reports, And Slides
 

@@ -25,7 +25,7 @@ SCRIPT_CANDIDATES = [
         "Check whether the application's existing CLI or local launcher already owns this operation.",
     ),
     (
-        re.compile(r"\b(window|file|edit|assets|gameobject|component|tools|help)\s*>\s*[\w &./-]+", re.IGNORECASE),
+        re.compile(r"(?:\b[A-Z][\w-]+|\b(?i:file|edit|view|window|tools|help)|`[\w-]+)[ \t]*>[ \t]*[\w &./-]+"),
         "Check for an existing API or local command; a menu path alone does not establish an automation opportunity.",
     ),
     (

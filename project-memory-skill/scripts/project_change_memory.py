@@ -159,7 +159,7 @@ def _project_identity(project_root):
         "name": name,
         "root": ".",
         "key": f"{_slug(name, 'project')}-{path_hash}",
-        "owner": _canonical_project_owner(_registered_owner(root) or ""),
+        "owner": _canonical_project_owner(_registered_owner(root, require_registration=True) or ""),
     }
 
 
@@ -481,34 +481,72 @@ DOCUMENT_PROJECT_OWNER_ROOTS = (
     ("Muse/SVGDrawer", "SVGDrawer"),
     ("Muse/MuseAI", "MuseAI"),
     ("Muse/UserExamples", "MuseAI"),
-    ("YofaGames/ThisIsMyOregon", "ThisIsMyOregon"),
-    ("YofaGames/SpriteTamer", "ThisIsMyOregon"),
-    ("YofaGames/AIAnimation2D", "AIAnimation2D"),
-    ("YofaGames/AIShaderGraphic2D", "AIShaderGraphic2D"),
-    ("YofaGames/AIVFX2D", "AIVFX2D"),
-    ("YofaGames/YoFaAssets", "YoFaAssets"),
-    ("YofaGames/YoFaPublisher", "YoFaPublisher"),
-    ("YofaGames/YoFaUnityPlguin", "YoFaUnityPlguin"),
-    ("Mokozoo/Unity-淘金热", "Unity-淘金热"),
     ("FilesManagement/Destiny", "Destiny"),
-    ("YofaGames/Destiny", "Destiny"),
-    ("YofaGames/FunctionWebsite", "FunctionWebsite"),
-    ("Unity3DPersonalProject/MetaStory", "MetaStory"),
-    ("YofaGames/MetaStory", "MetaStory"),
-    ("Unity3DPersonalProject/UnityCodexTest", "UnityCodexTest"),
-    ("YofaGames/UnityCodexTest", "UnityCodexTest"),
     ("PythonProject/XNews", "XNews"),
-    ("YofaGames/XNews", "XNews"),
     ("Muse/taggingapilandingpage", "TaggingAPILandingPage"),
     ("PythonProject/Agent-ImageEdtior", "AgentImageEditor"),
     ("DockerProject/Docker-Mokozoo", "Mokozoo"),
 )
 
 
+# Read data only from the official installed companion.
+COMPANION_OWNER_FILE = Path("qin-unity-skills/unity-code-skill/assets/project-memory-owners.json")
+# These two general project owners historically share their name with a companion checkout.
+SHARED_COMPANION_OWNERS = {"Destiny", "XNews"}
+# This historical checkout has an owner different from its folder name. If its
+# declaration disappears, deriving a new vault owner from the name splits history.
+LEGACY_RENAMED_ROOT = "YofaGames/SpriteTamer"
+
+
+class ProjectOwnerRegistryUnavailable(ValueError):
+    """An established renamed checkout requires its installed owner declaration."""
+
+
+def _companion_project_owner_paths(home):
+    home = home.resolve()
+    documents = home / "Documents"
+    catalog = home / ".agents" / "skills" / COMPANION_OWNER_FILE
+    try:
+        if catalog.resolve() != catalog or not catalog.is_file() or catalog.stat().st_size > 65536:
+            return ()
+        data = json.loads(catalog.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError, RuntimeError):
+        return ()
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        return ()
+    rows = data.get("document_roots")
+    if not isinstance(rows, list) or len(rows) > 256:
+        return ()
+    entries = []
+    built_in_owners = {owner.casefold() for path, owner in (*HOME_PROJECT_OWNER_ROOTS, *DOCUMENT_PROJECT_OWNER_ROOTS)}
+    seen = {path.casefold() for path, owner in DOCUMENT_PROJECT_OWNER_ROOTS}
+    for row in rows:
+        if not isinstance(row, list) or len(row) != 2 or not all(isinstance(value, str) for value in row):
+            return ()
+        relative, owner = row
+        parts = relative.split("/")
+        if len(parts) != 2 or "cache" in (part.casefold() for part in parts) or relative.casefold() in seen:
+            return ()
+        if not all(re.fullmatch(r"[\w-]+(?:[ .][\w-]+)*", value) and len(value) <= 160 for value in (*parts, owner)):
+            return ()
+        if _canonical_project_owner(owner).casefold() in built_in_owners and not (owner in SHARED_COMPANION_OWNERS and owner == parts[1]):
+            return ()
+        candidate = documents / relative
+        try:
+            if candidate.resolve() != candidate:
+                continue
+        except (OSError, RuntimeError):
+            continue
+        seen.add(relative.casefold())
+        entries.append((candidate, owner))
+    return tuple(entries)
+
+
 def _registered_project_owner_paths():
     home = Path.home()
     entries = [(home / relative, owner) for relative, owner in HOME_PROJECT_OWNER_ROOTS]
     entries.extend((home / "Documents" / relative, owner) for relative, owner in DOCUMENT_PROJECT_OWNER_ROOTS)
+    entries.extend(_companion_project_owner_paths(home))
     return tuple(entries)
 
 
@@ -523,7 +561,7 @@ def _registered_owner_alias(record_root):
     return _normalized_registered_root(record_root)
 
 
-def _registered_owner(record_root):
+def _registered_owner(record_root, *, require_registration=False):
     if str(record_root or "").strip() in {"", "."}:
         return None
     root = _registered_owner_alias(record_root)
@@ -537,6 +575,12 @@ def _registered_owner(record_root):
             continue
         if root == registered_root or root.startswith(registered_root + "/"):
             return owner
+    if not require_registration:
+        return None
+    protected = _normalized_registered_root(Path.home() / "Documents" / LEGACY_RENAMED_ROOT)
+    relative = PurePosixPath(root)
+    if relative.is_relative_to(protected) and relative.relative_to(protected).parts[:1] != ("cache",):
+        raise ProjectOwnerRegistryUnavailable(f"Restore the installed owner registry at {COMPANION_OWNER_FILE} before using this checkout's memory.")
     return None
 
 

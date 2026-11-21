@@ -43,7 +43,7 @@ Use [portable, quiet execution](../code-skill/references/skill-platform-compatib
 Identify the consumer and claim. Confirm the workspace and version loaded by a running service. Bind material evidence to the source revision or hash, served process or installed artifact, effective configuration, runtime/ABI and provider/environment. Keep secrets out of evidence and use existing reporting.
 
 - Source review and hashes establish source evidence. Mocks and synthetic fixtures cover modeled contracts. Verify runtime claims through the affected consumer.
-- Report the actual surface, whether browser, Editor, desktop Player, emulator, Simulator, physical device, store package or provider backend. Run supported checks and state outstanding surfaces.
+- Report the actual surface, whether browser, desktop application, emulator, simulator, physical device, store package or provider backend. Run supported checks and state outstanding surfaces.
 - Verify each claimed stage at its owner, from build/export and installation through submission, backend completion and provider acceptance. For remote side effects, read authoritative resulting state after a callback or request.
 - Read effective configuration and delivered bytes through the final consumer. Bind any log, preview or receipt to the exact result.
 

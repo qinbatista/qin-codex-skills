@@ -443,6 +443,12 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
             self.assertIn(f"({skill_name}/SKILL.md)", readme)
 
 
+    def test_general_routing_table_matches_the_managed_pack(self):
+        guide = SKILLS_DIR / "task-analyze-skill" / "references" / "global-skill-routing.md"
+        table = [line.split("|")[2].strip() for line in guide.read_text(encoding="utf-8").splitlines() if line.startswith("|")]
+        entries = [f"`qin-codex-skills/{skill}/SKILL.md`" for skill in sync_global_skills.PRIMARY_SKILL_ORDER]
+        self.assertCountEqual(table[2:], entries)
+
     def test_legacy_readme_is_compact_and_uses_english_guidance(self):
         readme = sync_global_skills.build_readme(self.primary_skill_paths(), language="zh")
         template = sync_global_skills.CHINESE_README_TEMPLATE.read_text(encoding="utf-8").rstrip() + "\n"

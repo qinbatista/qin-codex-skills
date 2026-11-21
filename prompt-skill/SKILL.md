@@ -41,7 +41,7 @@ Follow [Management's authoring rules](../management-skill/SKILL.md#authoring-rul
 | Prompt in executable code | [Code Skill](../code-skill/SKILL.md) and [string integration](../code-skill/references/prompt-generation.md) for syntax, interpolation, and consumers |
 | Functional code shipped in Skills | [Skill platform compatibility](../code-skill/references/skill-platform-compatibility.md) |
 
-Match image checks to the intended use. A checkerboard is not alpha. Verify actual alpha and file structure when required, alongside any visual fidelity checks. Apply sprite-specific restrictions only to relevant outputs.
+Match image checks to the intended use. A checkerboard is not alpha. Verify actual alpha and file structure when required, alongside any visual fidelity checks. Apply format-specific restrictions only when the receiving asset requires them.
 
 For actual image jobs, verify prompt acceptance on its own. Apply [image generation and closure](../workflow-skill/references/image-generation.md) for native delivery, owner synchronization, account deletion/readback and owned-tab closure.
 

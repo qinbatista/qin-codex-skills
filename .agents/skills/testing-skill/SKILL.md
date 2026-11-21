@@ -7,6 +7,8 @@ description: Maintain this project's test purposes and scripts; use before addin
 
 Read [the test registry](references/test-registry.json) before adding a maintained Python test or running an extended test campaign. Find an existing script with the same goal first. Update or combine useful cases, remove obsolete exact duplicates after updating their runners and references, and add a script only for an uncovered behavior or compatibility boundary. The registry records each script's purpose, goal, level, repository-relative path, runner, and owning Skill. Update it whenever a script moves, changes purpose, or is retired.
 
+For a requested Level 2 check of Codex-written Python, run the [writing cases](references/codex-python-writing.md). Each independent answer faces real CSV, pagination or SQLite failure cases.
+
 Choose the smallest level that proves the task's claim:
 
 | Level | Evidence |

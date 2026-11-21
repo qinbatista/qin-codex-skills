@@ -563,11 +563,13 @@ def recall(project_root, vault, *, module="", files=None, symbols=None, query=""
     result = {"status": "no-matches", "entries": [], "parent_context": [], "references": [], "stale": [], "unverified": [], "retired": [], "maintenance_due": False, "limitations": []}
     if selected_symbols and (not module or len(selected_files) != 1):
         return {**result, "status": "skipped", "reason": "method_context_requires_module_exact_file_and_symbol"}
-    project, paths = _paths(root, vault)
-    if not paths["index"].exists():
-        return {**result, "status": "skipped", "reason": "current_index_missing"}
     try:
+        project, paths = _paths(root, vault)
+        if not paths["index"].exists():
+            return {**result, "status": "skipped", "reason": "current_index_missing"}
         state = load_knowledge(root, vault)
+    except memory.ProjectOwnerRegistryUnavailable as error:
+        return {**result, "status": "skipped", "reason": "project_owner_registry_unavailable", "limitations": [str(error)]}
     except ProjectIdentityError:
         return {**result, "status": "skipped", "reason": "exact_project_mismatch"}
     words = re.findall(r"[\w.+-]+", _text(query, "query", required=False).casefold())[:12]
@@ -675,11 +677,13 @@ def scopes(project_root, vault, *, query="", files=None, limit=5):
     terms = re.findall(r"[\w.+-]+", searchable_text(_text(query, "query", required=False)))[:12]
     selected_files = sorted(set(_relative_file(value, root) for value in (files or [])))
     result = {"status": "no-matches", "scopes": [], "facts_returned": False, "history_loaded": False, "source_freshness_checked": False}
-    project, paths = _paths(root, vault)
-    if not paths["index"].exists():
-        return {**result, "status": "skipped", "reason": "current_index_missing"}
     try:
+        project, paths = _paths(root, vault)
+        if not paths["index"].exists():
+            return {**result, "status": "skipped", "reason": "current_index_missing"}
         state = load_knowledge(root, vault)
+    except memory.ProjectOwnerRegistryUnavailable as error:
+        return {**result, "status": "skipped", "reason": "project_owner_registry_unavailable", "limitations": [str(error)]}
     except ProjectIdentityError:
         return {**result, "status": "skipped", "reason": "exact_project_mismatch"}
     result["project"] = state["project"]["owner"]

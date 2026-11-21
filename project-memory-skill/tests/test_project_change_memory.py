@@ -27,13 +27,37 @@ class RetiredCodexMemoryTests(unittest.TestCase):
         if override is None:
             self.addCleanup(self.cache.rmdir)
 
-    def test_sprite_tamer_root_uses_declared_owner_without_matching_unregistered_clones(self):
-        with mock.patch.object(MEMORY.Path, "home", return_value=Path.cwd()):
-            home = Path.cwd()
-            self.assertEqual(MEMORY._registered_owner(home / "Documents/YofaGames/SpriteTamer"), "ThisIsMyOregon")
-            self.assertEqual(MEMORY._registered_owner(home / "Documents/YofaGames/SpriteTamer/Assets"), "ThisIsMyOregon")
-            self.assertIsNone(MEMORY._registered_owner(home / "Documents/Clones/SpriteTamer"))
-            self.assertIsNone(MEMORY._registered_owner(home / "Documents/YofaGames/SpriteTamer/Cache/temp-fixture"))
+    def test_optional_package_resolves_only_declared_roots_from_its_installed_registry(self):
+        with tempfile.TemporaryDirectory(dir=self.cache) as temporary, mock.patch.object(MEMORY.Path, "home", return_value=Path(temporary)):
+            home = Path(temporary)
+            collection = "Examples"
+            renamed = MEMORY.LEGACY_RENAMED_ROOT
+            primary = f"{collection}/Inventory"
+            current = home / "Documents" / renamed
+            package = home / ".agents" / "skills" / MEMORY.COMPANION_OWNER_FILE
+            rows = [[primary, "Inventory"], [renamed, "Inventory"]]
+            contents = json.dumps({"schema_version": 1, "document_roots": rows})
+            other = home / ".agents/skills/unrelated/assets/project-memory-owners.json"
+            other.parent.mkdir(parents=True)
+            other.write_text(contents, encoding="utf-8")
+            with self.assertRaises(MEMORY.ProjectOwnerRegistryUnavailable):
+                MEMORY._registered_owner(current, require_registration=True)
+            other_project = {"owner": "MuseAI", "key": "independent-fixture"}
+            self.assertFalse(MEMORY._record_matches_project({"project": {"root": str(current), "key": "renamed-fixture"}}, other_project))
+            self.assertIsNone(MEMORY._registered_owner(home / "Documents" / collection / "Independent"))
+            package.parent.mkdir(parents=True)
+            package.write_text(contents, encoding="utf-8")
+            self.assertEqual(MEMORY._registered_owner(current / "src"), "Inventory")
+            self.assertIsNone(MEMORY._registered_owner(home / "Documents/Clones" / current.name))
+            self.assertIsNone(MEMORY._registered_owner(current / "Cache/temp-fixture"))
+            self.assertEqual(MEMORY._registered_owner_project_keys("Inventory"), {MEMORY._project_key_for_root(home / "Documents" / path) for path, owner in rows})
+
+            for bad in ([renamed.swapcase(), "Other"], [renamed, "Other"], ["../escape", "Other"], ["Muse/MuseAI", "Other"], [primary + "/nested", "Other"], [f"{collection}/Foreign", "Global Codex Skills"], [f"{collection}/MuseAI", "MuseAI"], ["Cache/Foreign", "Other"]):
+                with self.subTest(row=bad):
+                    package.write_text(json.dumps({"schema_version": 1, "document_roots": [*rows, bad]}), encoding="utf-8")
+                    with self.assertRaises(MEMORY.ProjectOwnerRegistryUnavailable):
+                        MEMORY._registered_owner(current, require_registration=True)
+                    self.assertEqual(MEMORY._registered_owner(home / "Documents/Muse/MuseAI"), "MuseAI")
 
     def test_official_skill_owner_preserves_legacy_history_without_matching_other_roots(self):
         with tempfile.TemporaryDirectory(dir=self.cache) as temporary, mock.patch.object(MEMORY.Path, "home", return_value=Path(temporary)):

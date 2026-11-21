@@ -14,15 +14,8 @@ The global pack root is `~/.agents/skills`. The paths in this guide are below th
 | Plan local execution for repeatable tests, diagnostics, or multi-step operations, or optimize an existing code path or workflow | `qin-codex-skills/optimization-skill/SKILL.md` |
 | Recall or maintain project knowledge in Obsidian | `qin-codex-skills/project-memory-skill/SKILL.md` |
 | Maintain Skills, manage installation, or maintain project AI indexes | `qin-codex-skills/management-skill/SKILL.md` |
-| Write or review C# and change Unity gameplay, serialized state, Jobs, resources, or SDK integrations | `qin-unity-skills/unity-code-skill/SKILL.md` |
-| Place, move, or import Unity Prefabs, scenes, textures, Sprites, or other assets | `qin-unity-skills/unity-assets-skill/SKILL.md` |
-| Change Unity UI Toolkit or Canvas, screen layout, navigation, or insets | `qin-unity-skills/unity-ui-skill/SKILL.md` |
-| Change Unity clips, Animator states, motion timing, bones, or rig transfer | `qin-unity-skills/unity-animation-skill/SKILL.md` |
-| Change Unity particles, VFX, shaders, or material effects | `qin-unity-skills/unity-effects-skill/SKILL.md` |
-| Verify Unity Editor, Play Mode, Player, device, build, or profiling behavior | `qin-unity-skills/unity-testing-skill/SKILL.md` |
-| Build a Unity package for testing | [Unity Testing's packaging route](https://github.com/qinbatista/qin-unity-skills/blob/master/unity-testing-skill/references/runtime-and-artifact-evidence.md#isolated-test-packaging) selects the producer. Apply [Workflow's Cache lifecycle](../../workflow-skill/references/project-cache-artifact-policy.md#plan-before-producing-files) to the selected owner's task run. |
 
-Code owns shared code policy. Unity Code owns C# and engine behavior, with only the common C# rules applying outside Unity. Verify owns evidence standards. Unity Testing selects the real Unity runner and runtime. Use Assets for imports and serialized references, UI for screen structure and input, Animation for motion playback, and Effects for appearance and emission. Apply additional entries only for work the task actually crosses. A linked game follows its current YoFaAssets source and local game rules before the reusable Unity guidance.
+For language, platform or feature-specific work, also match the descriptions of other installed Skills. When a matching pack supplies its own `*/references/global-skill-routing.md`, read it and open the entries it selects. Otherwise open the matching Skill directly. Code supplies the shared writing rules and Verify the evidence standards.
 
 ## Require routing across projects
 
@@ -30,7 +23,7 @@ Set `developer_instructions` in the Codex user `config.toml` under `CODEX_HOME` 
 
 ```toml
 developer_instructions = """
-For tasks involving Qin's project workflow, code, prompts, verification, optimization, project memory, Skill management, or Unity, follow the project's startup and source-owner rules. Read ~/.agents/skills/qin-codex-skills/task-analyze-skill/references/global-skill-routing.md and open every matching installed SKILL.md before the corresponding work, even if the user does not name a Skill.
+For tasks involving Qin's project workflow, code, prompts, verification, optimization, project memory, Skill management or another installed Qin Skill, follow the applicable project's startup and source-owner rules. Read ~/.agents/skills/qin-codex-skills/task-analyze-skill/references/global-skill-routing.md and open every matching installed SKILL.md before the corresponding work, even if the user does not name a Skill.
 """
 ```
 

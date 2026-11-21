@@ -10,7 +10,6 @@ FORBIDDEN_SKILL_NAME_PATTERNS = (
     "qin-karpathy-guidelines",
     "qin-prompt-creating",
     "qin-python-code-checker",
-    "qin-unity-csharp-minimal-style",
     "qin-done-means-tested",
     "qin-test-pdf-report",
     "qin-image-editing-workflow",

@@ -62,6 +62,8 @@ The readable view links an exact memory anchor only when that anchor exists. Oth
 
 ## Registered root aliases
 
+Project Memory reads optional collection registrations from the companion pack's installed data file. An exact registered root and its current or historical keys identify the vault owner. Keep a renamed checkout's memory pending if its required registration is unavailable. Restoring the pack restores access to the existing index. Unregistered same-name clones retain their own keys.
+
 After confirming that a moved or second-machine checkout belongs to the same repository, use `project_knowledge.py register-alias --project-root ROOT --vault VAULT --expected-owner OWNER --expected-project-key STORED_KEY --expected-index-sha256 SHA256`. The root must be registered to that exact owner. Read the stored key and SHA from that owner's current `Memory.json`; a changed index requires a fresh read. The guarded writer retains the primary key, entries, history, maintenance and readable knowledge, adds only the current registered root key, and verifies readback. Repeating an existing alias does not write. Owner conflicts, unregistered roots, malformed aliases and links reject; never relabel an index by name or edit its keys manually.
 
 ## AI-index triggered synthesis

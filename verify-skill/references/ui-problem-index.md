@@ -50,7 +50,7 @@ Apply the [shared readable UI rules](../../workflow-skill/references/readable-ui
 - `UI-027`: same size text boxes, uneven input widths, same row numeric inputs, small count inputs
 - `UI-028`: UI update, make UI better, optimize UI, opitmize UI, current page image, ChatGPT image review, same theme
 - `UI-029`: empty icon button, blank circle, icon-only action, iconify missing, async icon dependency
-- `UI-030`: image preview, texture preview, sprite preview, square preview, stretched image
+- `UI-030`: image preview, texture preview, asset preview, square preview, stretched image
 - `UI-031`: compact header, low-information hero, one-line header, sparse intro, status chips
 - `UI-032`: footer, site footer, low-information footer, tall footer, compact footer
 - `UI-033`: contact form, inquiry form, quote form, too many questions, required fields
@@ -272,7 +272,7 @@ Validation: Disable or delay the icon library in a rendered check and confirm th
 
 ### UI-030 Image Preview Boxes Drift From Square
 
-Terms: image preview, texture preview, sprite preview, map preview, square preview, stretched image, resize, UI scale, thumbnail.
+Terms: image preview, texture preview, asset preview, map preview, square preview, stretched image, resize, UI scale, thumbnail.
 Problem: Image or texture preview surfaces stretch into wide rectangles or tall panels as the window resizes, making asset comparison harder and creating dead empty space.
 Solution: Calculate preview boxes from the smaller available dimension and draw the image inside that square. Keep labels and actions outside the square, and use scrolling or compact cards for repeated thumbnails instead of stretching the preview box.
 Validation: Desktop and resized/narrow checks show every image preview viewport as a square, with no label or action text beside the image and no distorted texture display.

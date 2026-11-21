@@ -34,7 +34,7 @@ Briefly explain the intended result, acceptance criteria and implementation step
 | Async results, pooled reuse, caches, configuration handoffs, or external retries | [State and side effects](references/state-and-side-effects.md) |
 | Host helpers, scripts, subprocesses, or tests | [Portable, quiet execution](references/skill-platform-compatibility.md) |
 
-Use the installed `qin-unity-skills/unity-code-skill` for C# writing rules and checking. Select its engine-specific references for Unity work. The standalone C# Skill is also available from [its source](https://github.com/qinbatista/qin-unity-skills/tree/master/unity-code-skill).
+For other languages, use the [installed Skill routing guide](../task-analyze-skill/references/global-skill-routing.md) to find their writing rules and source checkers.
 
 ## Verification
 

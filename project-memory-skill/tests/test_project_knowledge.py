@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "project-memory-skill" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(ROOT / "code-skill" / "scripts"))
+import ending_memory
 import project_knowledge as knowledge
 from hidden_process import hidden_process_options
 
@@ -420,15 +421,15 @@ class ProjectKnowledgeTests(unittest.TestCase):
 
     def test_alias_cli_uses_actual_registered_home_root_and_reads_back(self):
         home = self.root / "registered-home"
-        project = home / "Documents/YofaGames/YoFaAssets"
+        project = home / "Documents/Muse/SVGDrawer"
         shutil.copytree(self.project, project)
         with mock.patch.object(knowledge.memory.Path, "home", return_value=home):
-            self.assertEqual(knowledge.memory._registered_owner(project), "YoFaAssets")
-            self.record_event("same-project-proof", owner="YoFaAssets")
+            self.assertEqual(knowledge.memory._registered_owner(project), "SVGDrawer")
+            self.record_event("same-project-proof", owner="SVGDrawer")
             knowledge.apply_entries(project, self.vault, [self.method()], event_id="same-project-proof", now=self.now)
-        index = self.vault / "Projects/YoFaAssets/Memory.json"
+        index = self.vault / "Projects/SVGDrawer/Memory.json"
         state = json.loads(index.read_text())
-        state["project"]["key"] = "yofaassets-0123456789"
+        state["project"]["key"] = "svgdrawer-0123456789"
         index.write_text(json.dumps(state), encoding="utf-8")
         (self.vault / "AI Memory").mkdir(exist_ok=True)
         arguments = self.alias_arguments(index, state)
@@ -442,14 +443,44 @@ class ProjectKnowledgeTests(unittest.TestCase):
         with mock.patch.object(knowledge.memory.Path, "home", return_value=home):
             self.assertEqual(knowledge.recall(project, self.vault, module="engine", files=["src/first.py"], symbols=["Worker.run"])["status"], "ok")
 
-    def test_registered_current_game_roots_have_exact_owners(self):
+    def test_removing_optional_alias_registry_preserves_existing_vault_and_ordinary_projects(self):
         home = self.root / "home"
+        relative = knowledge.memory.LEGACY_RENAMED_ROOT
+        collection = Path(relative).parent
+        project = home / "Documents" / relative
+        shutil.copytree(self.project, project)
+        ordinary = home / "Documents" / collection / "Independent"
+        ordinary.mkdir()
+        package = home / ".agents" / "skills" / knowledge.memory.COMPANION_OWNER_FILE
+        package.parent.mkdir(parents=True)
+        rows = [[relative, "Ledger"], [(collection / "Ledger").as_posix(), "Ledger"]]
+        package.write_text(json.dumps({"schema_version": 1, "document_roots": rows}), encoding="utf-8")
         with mock.patch.object(knowledge.memory.Path, "home", return_value=home):
-            for relative, owner in (("YofaGames/YoFaPublisher", "YoFaPublisher"), ("Mokozoo/Unity-淘金热", "Unity-淘金热")):
-                root = home / "Documents" / relative
-                self.assertEqual(knowledge.memory._registered_owner(root), owner)
-                self.assertIn(knowledge.memory._project_key_for_root(root), knowledge.memory._registered_owner_project_keys(owner))
-                self.assertIsNone(knowledge.memory._registered_owner(root / "Cache" / "copy"))
+            self.record_event("owned-proof", owner="Ledger")
+            knowledge.apply_entries(project, self.vault, [self.method()], event_id="owned-proof", now=self.now)
+            index = self.vault / "Projects/Ledger/Memory.json"
+            state = json.loads(index.read_text(encoding="utf-8"))
+            state["project"]["key"] = "ledger-0123456789"
+            index.write_text(json.dumps(state), encoding="utf-8")
+            registered = knowledge.register_alias(project, self.vault, **self.alias_arguments(index, state))
+            self.assertTrue(registered["read_back_verified"])
+            self.assertEqual(knowledge.recall(project, self.vault, module="engine")["status"], "ok")
+            original = index.read_bytes()
+            package.unlink()
+            self.assertEqual(knowledge.recall(project, self.vault, module="engine")["reason"], "project_owner_registry_unavailable")
+            self.assertEqual(knowledge.scopes(project, self.vault, query="engine")["reason"], "project_owner_registry_unavailable")
+            with self.assertRaises(knowledge.memory.ProjectOwnerRegistryUnavailable):
+                knowledge.apply_entries(project, self.vault, [self.method()], event_id="owned-proof")
+            (self.vault / "AI Memory/ai_memory.py").write_text("raise AssertionError('unexpected vault write')", encoding="utf-8")
+            pending = ending_memory.closeout({"durable": False}, project_root=project, vault=self.vault)
+            self.assertEqual((pending["status"], pending["reason"], pending["written"]), ("pending", "project_owner_registry_unavailable", False))
+            self.assertEqual(index.read_bytes(), original)
+            self.assertFalse((self.vault / "Projects" / project.name).exists())
+            self.record_event("independent-proof", owner="Independent")
+            knowledge.apply_entries(ordinary, self.vault, [{"scope": "project", "summary": "Independent project structure"}], event_id="independent-proof", now=self.now)
+            self.assertEqual(knowledge.recall(ordinary, self.vault, include_project_context=True)["entries"][0]["event_id"], "independent-proof")
+            package.write_text(json.dumps({"schema_version": 1, "document_roots": rows}), encoding="utf-8")
+            self.assertEqual(knowledge.recall(project, self.vault, module="engine")["entries"][0]["event_id"], "owned-proof")
 
     def test_explicit_relationships_remain_pointers_and_context_stays_local(self):
         relation = {"project": "OtherProject", "module": "shared-api", "file": "api.py", "symbol": "Client.send", "relation": "uses", "reason": "Consumes the documented API"}

@@ -404,7 +404,9 @@ class TaskResourceLedgerTests(ProjectCacheTestCase):
         ledger_path = LEDGER._absolute(self.project_root, self.task_root) / LEDGER.LEDGER_NAME
         LEDGER.save_ledger(ledger_path, self.ledger)
         marker = ledger_path.parent / LEDGER.MARKER_NAME
-        marker.write_bytes(marker.read_bytes())
+        replacement = marker.with_suffix(".replacement")
+        shutil.copy2(marker, replacement)
+        replacement.replace(marker)
         with self.assertRaisesRegex(ValueError, "marker identity changed"):
             LEDGER.finalize_task_root(self.ledger, self.project_root, ledger_path)
         self.ledger["binding"]["marker_identity"] = LEDGER._stat_identity(marker.stat())

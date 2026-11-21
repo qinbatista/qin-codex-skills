@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "code-skill" / "scripts"))
 from hidden_process import hidden_process_options
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "management-skill" / "scripts"))
-from install_skill_pack import skill_file
+from install_skill_pack import PACKS, skill_file
 
 
 SOURCE_REF = "refs/heads/master"
@@ -132,7 +132,7 @@ def publish(project, package):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", type=Path, required=True)
-    parser.add_argument("--plugin", choices=("qin-codex-skills", "qin-unity-skills"), required=True)
+    parser.add_argument("--plugin", choices=PACKS, required=True)
     parser.add_argument("--publish", action="store_true")
     args = parser.parse_args()
     project = args.project_root.resolve()

@@ -1,6 +1,6 @@
 # qin-codex-skills
 
-This repository owns eight public global Skills: Task Analyze, Workflow, Code, Verify, Prompt, Optimization, Project Memory and Management. Code maintains general coding philosophy and Python guidance. Their source folders own instructions, references, helpers and clean-clone tests. Product-specific implementations belong in project Skills.
+This repository owns eight public global Skills: Task Analyze, Workflow, Code, Verify, Prompt, Optimization, Project Memory and Management. Code maintains general coding philosophy and Python guidance. Their source folders own instructions, references, helpers and clean-clone tests. Specialist packs own their domain routes, worked examples and runtime tests. Product-specific implementations belong in project Skills. Use the [repeatable Python writing cases](.agents/skills/testing-skill/references/codex-python-writing.md) to test the general Code Skill.
 
 ## Global Skill pack
 
