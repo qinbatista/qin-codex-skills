@@ -1,62 +1,50 @@
 # qin-codex-skills
 
-This repository maintains eight global Codex skills. Projects retain domain rules.
-
-## What each skill does
-
-| Skill | Responsibility |
-| --- | --- |
-| [Task Analyze](task-analyze-skill/SKILL.md) | Reports Skill use; requires delivery and recovery. |
-| [Workflow](workflow-skill/SKILL.md) | Coordinates work and cleanup; preserves active/review/reuse resources. |
-| [Code](code-skill/SKILL.md) | Guides structure, readable code, and portable, quiet execution. |
-| [Prompt](prompt-skill/SKILL.md) | Shapes reusable prompts with clear inputs, constraints, and output contracts. |
-| [Verify](verify-skill/SKILL.md) | Checks real behavior in the active task; focuses test coverage. |
-| [Project Memory](project-memory-skill/SKILL.md) | Recalls project context and stores durable knowledge in Obsidian. |
-| [Optimization](optimization-skill/SKILL.md) | Simplifies requested code or workflows and measures claimed improvements. |
-| [Management](management-skill/SKILL.md) | Maintains project indexes, installs skills recoverably and validates authorized publication. |
-
-## Task flow
-
-1. At startup/resume, [check the current task project's AI index](management-skill/references/project-ai-index.md): request first-bootstrap consent; otherwise reuse focused routes. Never prompt or maintain indexes in reference projects. Ensure Obsidian memory, skip missing memory, and track Skill use.
-2. Preview the objective and implementation steps, then execute. Ask only for necessary decisions or authorization.
-3. For every task that changes the project, update and verify its relevant AI-index guidance before delivery. Reconcile root `AGENTS.md` when needed. Consult project testing Skills; run real affected-case checks and clean disposable resources.
-4. Close out guidance, memory and resources in the active task under [Project Memory](project-memory-skill/SKILL.md) and [Workflow](workflow-skill/SKILL.md). Codex chats and sessions remain user-managed; do not create or delete an Ending chat automatically.
-
-At completion, summarize actual Skill names, steps and reasons once, including branch use; distinguish unused, missing or unreadable Skills. Progress updates need no repeated lists; [reporting is mandatory](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
-
-Project memories stay isolated in Memory.json and Knowledge.md. Recall excludes stale facts. The active task consolidates touched entries and shared preferences remain scoped. `AGENTS.md` and Skills own stable rules; changing facts and history live in Obsidian.
-
-Repository work and installers use `--existing-only`; missing vaults remain pending. First-vault setup with [qin-llm-wiki](https://github.com/qinbatista/qin-llm-wiki) requires explicit authorization through [Project Memory](project-memory-skill/SKILL.md). Back up the whole vault containing Codex and project memory; the generator contains no private memories.
-
-macOS/Linux: `python3 -B project-memory-skill/scripts/obsidian_vault_setup.py --project-root . --existing-only`
-
-Windows PowerShell: `py -3 -B project-memory-skill\scripts\obsidian_vault_setup.py --project-root . --existing-only`
+This repository maintains eight global Codex skills for general software work.
 
 ## Install the global Skill pack
 
-Save [install_skill_pack.py](https://raw.githubusercontent.com/qinbatista/qin-codex-skills/master/management-skill/scripts/install_skill_pack.py) and run the command for your operation. Use `py -3 -B` on Windows.
+Paste this into an AI assistant with a local terminal.
 
 ```text
-python3 -B install_skill_pack.py install qin-codex-skills
-python3 -B install_skill_pack.py update qin-codex-skills
-python3 -B install_skill_pack.py uninstall qin-codex-skills
+Install qin-codex-skills on this computer using the Python 3 installer at
+https://raw.githubusercontent.com/qinbatista/qin-codex-skills/master/management-skill/scripts/install_skill_pack.py
+Run its install qin-codex-skills action and verify the eight SKILL.md files
+under ~/.agents/skills/qin-codex-skills/. Report the installed Skill names.
 ```
 
-Codex loads the Skills directly from `~/.agents/skills/qin-codex-skills/<skill>/SKILL.md`. The directory contains the pack manifest and each Skill's files. READMEs, AGENTS, project indexes and tests stay in source. [Codex user Skill locations](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)
+For manual setup, save [install_skill_pack.py](https://raw.githubusercontent.com/qinbatista/qin-codex-skills/master/management-skill/scripts/install_skill_pack.py) and run it from the download directory.
 
-Update downloads the current `codex/plugin` package and replaces the whole directory. Uninstall removes the pack directory. When switching from the old Marketplace installation, also run `codex plugin remove qin-codex-skills@qin-codex-skills` and `codex plugin marketplace remove qin-codex-skills` to remove its previous copy.
+| Host | Command |
+| --- | --- |
+| macOS or Linux | `python3 -B install_skill_pack.py install qin-codex-skills` |
+| Windows PowerShell | `py -3 -B install_skill_pack.py install qin-codex-skills` |
+
+Check `~/.agents/skills/qin-codex-skills/<skill>/SKILL.md` and select `$code-skill` in Codex. `install_skill_pack.py update qin-codex-skills` replaces the whole directory from the published package. `install_skill_pack.py uninstall qin-codex-skills` removes the pack. [Installation checks](management-skill/assets/readme/examples.md#check-an-installation-and-publish-source) · [Codex Skill discovery](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)
+
+## What each skill does
+
+| Skill | What it does | Worked example |
+| --- | --- | --- |
+| [Task Analyze](task-analyze-skill/SKILL.md) | Defines the result and follows work through delivery. | [Fix a CSV import](management-skill/assets/readme/examples.md#define-the-finish-line) |
+| [Workflow](workflow-skill/SKILL.md) | Coordinates execution, recovery and cleanup. | [Retry a build or test](management-skill/assets/readme/examples.md#retry-a-build-or-test) |
+| [Code](code-skill/SKILL.md) | Guides ownership, structure and portable code. | [Write Python](management-skill/assets/readme/examples.md#write-a-python-input-boundary) · [Organize a project](management-skill/assets/readme/examples.md#organize-a-project) |
+| [Prompt](prompt-skill/SKILL.md) | Specifies repeatable AI behavior and output. | [Define a JSON response](management-skill/assets/readme/examples.md#specify-a-prompt-response) |
+| [Verify](verify-skill/SKILL.md) | Checks the actual behavior or output. | [Exercise the importer](management-skill/assets/readme/examples.md#verify-the-real-entry-point) |
+| [Project Memory](project-memory-skill/SKILL.md) | Recalls and records durable project facts in Obsidian. | [Recall a method contract](management-skill/assets/readme/examples.md#recall-and-record-project-decisions) |
+| [Optimization](optimization-skill/SKILL.md) | Improves a selected path and measures the gain. | [Measure batch parsing](management-skill/assets/readme/examples.md#measure-an-optimization) |
+| [Management](management-skill/SKILL.md) | Maintains AI indexes, installations and release checks. | [Verify and deliver a pack](management-skill/assets/readme/examples.md#check-an-installation-and-publish-source) |
+
+For Unity work, install the [Unity Skill pack](https://github.com/qinbatista/qin-unity-skills) alongside this one. [See how both packs work together](management-skill/assets/readme/examples.md#use-both-packs-on-a-unity-task).
+
+## Task flow
+
+1. Check the [current project's AI index](management-skill/references/project-ai-index.md), request consent for first creation and use the existing routes for an indexed project. Recall scoped facts and skip missing memory.
+2. Review the objective and implementation steps, then execute. Use project testing Skills and real affected-case checks.
+3. Update the relevant index for every project change and finish guidance, memory and cleanup in the active task. Codex chats and sessions remain user-managed.
+
+Project memories stay isolated in the configured Obsidian vault. At completion, summarize actual Skill names, steps and reasons once. [Routing guide](task-analyze-skill/references/global-skill-routing.md) · [Reporting](task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting)
 
 ## Maintain the source
 
-GitHub Actions publishes the package from `master` to `codex/plugin`. The [source publisher](management-skill/SKILL.md#publish) uses `--include-path` and `--include-commit` to verify and deliver selected changes through the configured upstream.
-
-Keep disposable development files in a fresh ignored `Cache/temp-<task>/` run under [the project Cache policy](workflow-skill/references/project-cache-artifact-policy.md).
-
-## Code reference owners
-
-- [Code philosophy](code-skill/references/code-writing-philosophy.md)
-- [State, async results and side effects](code-skill/references/state-and-side-effects.md)
-- [Actual target and evidence boundaries](verify-skill/SKILL.md#bind-evidence-to-the-actual-target)
-- [Python](code-skill/references/python-rules.md)
-- [Unity Code](https://github.com/qinbatista/qin-unity-skills/tree/master/unity-code-skill)
-- [Portable quiet execution](code-skill/references/skill-platform-compatibility.md)
+GitHub Actions publishes from `master` to `codex/plugin`. The [source publisher](management-skill/SKILL.md#publish) takes exact `--include-path` or `--include-commit` selections and delivers through the configured upstream. Keep disposable files in an ignored `Cache/temp-<task>/` work directory. [Cache policy](workflow-skill/references/project-cache-artifact-policy.md)
