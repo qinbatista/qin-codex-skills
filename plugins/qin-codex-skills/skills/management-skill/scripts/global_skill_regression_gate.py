@@ -208,7 +208,12 @@ def candidate_layouts(project_root: Path, deployed_root: Path, managed_skills: l
             for name in ("README.md", "README.zh.md"):
                 if (project_root / name).is_file():
                     shutil.copy2(project_root / name, source_candidate / name)
-            source_inputs = (PROJECT_TESTING_SKILL_RELATIVE_PATH, PROJECT_AI_INDEX_SKILL_RELATIVE_PATH, *PLUGIN_RELEASE_INPUTS)
+            source_inputs = (
+                PROJECT_TESTING_SKILL_RELATIVE_PATH,
+                PROJECT_AI_INDEX_SKILL_RELATIVE_PATH,
+                Path(".github/workflows/ci.yml"),
+                *PLUGIN_RELEASE_INPUTS,
+            )
             for relative in source_inputs:
                 source = project_root / relative
                 target = source_candidate / relative
