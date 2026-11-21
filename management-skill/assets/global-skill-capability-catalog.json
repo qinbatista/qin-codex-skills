@@ -423,7 +423,7 @@
       "id": "optimization",
       "owner_skill": "optimization-skill",
       "name": "Measured simplification",
-      "function": "Optimize requested or recurring work with measured evidence; measure improvements without triggering routine benchmarks.",
+      "function": "Plan a single local command for repeatable tests, diagnostics, and multi-step operations with stable inputs and checkable results. Reuse existing tools first, verify the chosen command, and measure claimed improvements.",
       "checks": [
         "optimization-units",
         "optimization-audit"
