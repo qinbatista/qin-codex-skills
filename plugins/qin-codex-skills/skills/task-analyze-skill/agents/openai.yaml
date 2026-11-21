@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Analyze"
+  short_description: "Define acceptance and deliver the verified result"
+  default_prompt: "Use $task-analyze-skill to define the final result, feasibility and acceptance criteria before execution. Carry out every viable authorized step through verified delivery. Repair recoverable failures and resolve routine choices directly. Name this chat only if its first naming is pending, and report actual Skill names, steps and reasons across branches once in the final response."

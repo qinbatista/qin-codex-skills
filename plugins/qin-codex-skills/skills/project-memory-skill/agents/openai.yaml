@@ -1,0 +1,4 @@
+interface:
+  display_name: "project-memory-skill"
+  short_description: "Central project knowledge and precise scoped recall"
+  default_prompt: "Use $project-memory-skill to recall exact project, module, file, or symbol context and consolidate durable knowledge and relationships in the central Obsidian project store."

@@ -9,6 +9,8 @@ Read [the test registry](references/test-registry.json) before adding a maintain
 
 For a requested Level 2 check of Codex-written Python, run the [writing cases](references/codex-python-writing.md). Each independent answer faces real CSV, pagination or SQLite failure cases.
 
+Replay the [Git closeout case](references/git-closeout.md) to check account scope, worktree base, branch deletion and same-named tag retention with local remotes.
+
 Choose the smallest level that proves the task's claim:
 
 | Level | Evidence |

@@ -1,0 +1,2075 @@
+#!/usr/bin/env python3
+import argparse
+import atexit
+import copy
+import fnmatch
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+from contextlib import contextmanager
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
+from task_artifact_paths import resolve_task_artifact_root, task_artifact_scope, validate_task_directory, verify_cache_git
+
+
+# Kept self-contained because this installer also runs before skills are downloaded.
+def hidden_process_options(*, creationflags=0, startupinfo=None):
+    """Keep Windows console children hidden; leave other platforms unchanged.
+
+    Pass the result to subprocess.run or subprocess.Popen. Streams, timeouts,
+    process ownership, and cancellation stay with the caller. GUI programs
+    still require their own headless/background mode.
+    """
+    if sys.platform == "win32":
+        incompatible = subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS
+        if creationflags & incompatible:
+            raise ValueError("Hidden processes cannot request a new or detached console")
+        hidden_startup = copy.copy(startupinfo) if startupinfo is not None else subprocess.STARTUPINFO()
+        hidden_startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        hidden_startup.wShowWindow = subprocess.SW_HIDE
+        return {
+            "creationflags": creationflags | subprocess.CREATE_NO_WINDOW,
+            "startupinfo": hidden_startup,
+        }
+    return {}
+
+
+
+def load_skill_platform_checker(skills_dir):
+    checker_path = Path(skills_dir) / "code-skill" / "scripts" / "skill_platform_check.py"
+    module_spec = importlib.util.spec_from_file_location("skill_platform_check", checker_path)
+    if module_spec is None or module_spec.loader is None:
+        raise RuntimeError(f"Refusing to publish because the skill platform gate is unavailable: {checker_path}")
+    checker_module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(checker_module)
+    return checker_module
+
+
+DEFAULT_REPOSITORY = "qinbatista/qin-codex-skills"
+DEFAULT_SOURCE_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_PROJECT_ROOT = Path.cwd().resolve()
+DEFAULT_CACHE_ROOT = resolve_task_artifact_root(DEFAULT_PROJECT_ROOT, "management-skill-sync")
+DEFAULT_STATE_FILE = DEFAULT_CACHE_ROOT / "state" / "management-skill-sync.json"
+SYNC_STATE_RECEIPTS = {}
+SYNC_STATE_DIRECTORIES = set()
+GITIGNORE_TEXT = """.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.env
+.env.*
+cache/
+/Cache/
+outputs/
+work/
+data/cache/
+local/
+.venv/
+venv/
+node_modules/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+"""
+EXCLUDED_PARTS = {
+    ".git",
+    ".github",
+    ".DS_Store",
+    "__pycache__",
+    "cache",
+    "Cache",
+    "outputs",
+    "work",
+    "local",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache"
+}
+EXCLUDED_SUFFIXES = (".pyc", ".pyo", ".log")
+SENSITIVE_NAME_PATTERNS = (
+    ".env",
+    ".env.*",
+    "auth.json",
+    "auth*.json",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "id_rsa",
+    "id_rsa.*",
+    "id_ed25519",
+    "id_ed25519.*",
+    "*credential*.json",
+    "*credentials*.json",
+    "*secret*.json",
+    "*token*.json",
+    "*cookie*.json",
+    "*.sqlite",
+    "*.sqlite3",
+    "*.db"
+)
+SECRET_VALUE_PATTERNS = (
+    re.compile(r"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"ghp_[A-Za-z0-9_]{20,}"),
+    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)?PRIVATE KEY-----"),
+    re.compile(r'"(?:access_token|refresh_token|id_token|session_token|api_key|secret|password)"\s*:\s*"[^"\n]{12,}"', re.IGNORECASE),
+    re.compile(r"(?:api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"\n]{12,}['\"]", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[A-Za-z0-9._-]+/", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])\\(?:Users|home)\\[A-Za-z0-9._-]+\\", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])[A-Z]:\\Users\\[^\\\r\n]+\\", re.IGNORECASE)
+)
+CATEGORY_ORDER = ["Workflow", "Code", "Optimization", "Generation", "Verification", "Management", "General"]
+PRIMARY_SKILL_ORDER = ["task-analyze-skill", "workflow-skill", "prompt-skill", "code-skill", "project-memory-skill", "verify-skill", "optimization-skill", "management-skill"]
+APPROVED_GLOBAL_SKILL_NAMES = set(PRIMARY_SKILL_ORDER)
+SUPPORT_SKILL_NAMES = set()
+PROJECT_TESTING_SKILL = Path(".agents") / "skills" / "testing-skill"
+PROJECT_AI_INDEX_SKILL = Path("skills") / "ai-index"
+LEGACY_PROJECT_AI_INDEX_SKILL = Path(".agents") / "skills" / "ai-index"
+GLOBAL_AGENTS_ASSET = Path("task-analyze-skill") / "assets" / "global-agents-entry-rule.md"
+GLOBAL_AGENTS_DIRECTIVE = "This template is written only by the explicit `install-global-agents` command; deploy, pull, and sync preserve user AGENTS.md files.\n\n"
+LEGACY_GLOBAL_AGENTS_DIRECTIVE = "Merge this section into `~/.codex/AGENTS.md` and `~/AGENTS.md`.\n\n"
+GLOBAL_AGENTS_BACKUP_DIRECTORY = "global-agents-backups"
+GLOBAL_AGENTS_BACKUP_MANIFEST = "manifest.json"
+AI_INDEX_STARTUP_START = "<!-- qin-ai-index-startup -->"
+AI_INDEX_STARTUP_END = "<!-- /qin-ai-index-startup -->"
+INLINE_CLOSEOUT_START = "<!-- qin-inline-closeout -->"
+INLINE_CLOSEOUT_END = "<!-- /qin-inline-closeout -->"
+LEGACY_CLOSEOUT_PREFIXES = ("After the main result and real in-task verification complete, use one authorized visible projectless Ending ", "For every identifiable project task, including ordinary questions and source investigations, complete the current-project cleanup checkpoint, AI-index check and scoped Obsidian memory closeout in the originating chat.")
+OFFICIAL_USER_SKILLS_DIRECTORY = Path.home() / ".agents" / "skills"
+INSTALL_TRANSACTION_PREFIX = ".qin-codex-install-"
+INSTALL_MANIFEST_NAME = "install-transaction.json"
+INSTALL_LOCK_NAME = ".qin-codex-install.lock"
+ENGLISH_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.md"
+CHINESE_README_TEMPLATE = Path(__file__).resolve().parents[1] / "assets" / "readme" / "github-readme-template.zh.md"
+CATEGORY_LABEL_WIDTH = 28
+SKILL_LABEL_WIDTH = 24
+CATEGORY_LABELS = {
+    "Workflow": "Workflow / 工作流类",
+    "Code": "Code / 代码类",
+    "Optimization": "Optimization / 优化类",
+    "Generation": "Generation / 生成类",
+    "Verification": "Verification / 验证类",
+    "Management": "Management / 管理类",
+    "General": "General / 通用类",
+}
+CHINESE_CATEGORY_LABELS = {
+    "Workflow": "工作流类 / Workflow",
+    "Code": "代码类 / Code",
+    "Optimization": "优化类 / Optimization",
+    "Generation": "生成类 / Generation",
+    "Verification": "验证类 / Verification",
+    "Management": "管理类 / Management",
+    "General": "通用类 / General",
+}
+SKILL_SUMMARIES = {'task-analyze-skill': 'Explain the objective and implementation steps before execution.', 'workflow-skill': 'Coordinate work, verification and global resource cleanup; preserve active use and user review/reuse.', 'prompt-skill': 'Write concise reusable instructions with clear goals, constraints, and output expectations.', 'code-skill': 'Use direct readable code, explicit ownership, language conventions, and coherent UI.', 'project-memory-skill': 'Recall exact project and method knowledge; consolidate architecture and relationships centrally.', 'optimization-skill': 'Simplify requested or recurring work with measured evidence.', 'verify-skill': 'Verify changed behavior in the active task; Ending records memory and audits disposable resource cleanup.', 'management-skill': 'Maintain source, install recoverably, and publish only when authorized.'}
+CHINESE_SKILL_SUMMARIES = {'task-analyze-skill': '先简述目标和实现步骤，再按步骤执行。', 'workflow-skill': '明确目标和依赖，安全并行，在当前任务整合并验证。', 'prompt-skill': '编写简洁的可复用指令，明确目标、约束和输出。', 'code-skill': '直接清晰的代码、明确职责、语言规范和一致 UI。', 'project-memory-skill': '集中保存架构与方法知识，精确读取项目记忆并整理关联。', 'optimization-skill': '按需简化重复工作，以实测支持结果。', 'verify-skill': '在当前任务内验证受影响行为；Ending 只更新记忆。', 'management-skill': '维护源码、可恢复安装、仅按授权发布。'}
+SKILL_CONTENTS = {'task-analyze-skill': [('Purpose', 'Explain the objective and implementation steps before execution.')], 'workflow-skill': [('Purpose', 'Coordinate work, verification and global resource cleanup; preserve active use and user review/reuse.')], 'prompt-skill': [('Purpose', 'Write concise reusable instructions with clear goals, constraints, and output expectations.')], 'code-skill': [('Purpose', 'Use direct readable code, explicit ownership, language conventions, and coherent UI.')], 'project-memory-skill': [('Purpose', 'Recall exact project and method knowledge; consolidate architecture and relationships centrally.')], 'optimization-skill': [('Purpose', 'Simplify requested or recurring work with measured evidence.')], 'verify-skill': [('Purpose', 'Verify changed behavior in the active task; Ending records memory and audits disposable resource cleanup.')], 'management-skill': [('Purpose', 'Maintain source, install recoverably, and publish only when authorized.')]}
+CHINESE_SKILL_CONTENTS = {'task-analyze-skill': [('职责', '先简述目标和实现步骤，再按步骤执行。')], 'workflow-skill': [('职责', '明确目标和依赖，安全并行，在当前任务整合并验证。')], 'prompt-skill': [('职责', '编写简洁的可复用指令，明确目标、约束和输出。')], 'code-skill': [('职责', '直接清晰的代码、明确职责、语言规范和一致 UI。')], 'project-memory-skill': [('职责', '集中保存架构与方法知识，精确读取项目记忆并整理关联。')], 'optimization-skill': [('职责', '按需简化重复工作，以实测支持结果。')], 'verify-skill': [('职责', '在当前任务内验证受影响行为；Ending 只更新记忆。')], 'management-skill': [('职责', '维护源码、可恢复安装、仅按授权发布。')]}
+
+
+def run_command(command, cwd=None, env=None):
+    if os.name == "nt" and command and command[0] == "git":
+        command = ["git", "-c", "core.longpaths=true", *command[1:]]
+    return subprocess.run(command, cwd=cwd, env=env, check=True, text=True, encoding="utf-8", capture_output=True, **hidden_process_options())
+
+
+def lexical_absolute_path(path):
+    expanded_path = Path(path).expanduser()
+    return Path(os.path.abspath(expanded_path))
+
+
+def run_release_gate(source_dir, skills_dir, mode):
+    source_dir = Path(source_dir).expanduser().resolve()
+    skills_dir = Path(skills_dir).expanduser().resolve()
+    gate_path = skills_dir / "management-skill" / "scripts" / "global_skill_regression_gate.py" if mode == "deployed" else source_dir / "management-skill" / "scripts" / "global_skill_regression_gate.py"
+    if not gate_path.is_file():
+        raise RuntimeError(f"Retained-capability validation is unavailable after installation: {gate_path}")
+    command = [
+        sys.executable,
+        "-B",
+        str(gate_path),
+        "check",
+        "--project-root",
+        str(source_dir),
+        "--skills-dir",
+        str(skills_dir),
+        "--mode",
+        mode,
+    ]
+    if (sys.platform == "win32" and source_dir.name == "s"
+            and source_dir.parent.name.startswith("temp-p-")
+            and source_dir.is_relative_to(DEFAULT_PROJECT_ROOT / "Cache")):
+        publication_run = validate_task_directory(source_dir.parent.parent, DEFAULT_PROJECT_ROOT)
+        command.extend(["--layout-run-root", str(publication_run),
+                        "--layout-owner-project", str(DEFAULT_PROJECT_ROOT)])
+    # A publication candidate is a different project from the invoking checkout.
+    # Bind the child to that project's own registered run, never the caller's Cache.
+    with task_artifact_scope(source_dir, "managed-release-gate") as cache_root:
+        temporary = cache_root / "tmp"
+        temporary.mkdir()
+        environment = dict(os.environ, CODEX_PROJECT_CACHE_ROOT=str(cache_root))
+        environment.update({name: str(temporary) for name in ("TMP", "TEMP", "TMPDIR")})
+        completed = subprocess.run(command, cwd=source_dir, env=environment, text=True, encoding="utf-8", capture_output=True, check=False, timeout=3600, **hidden_process_options())
+        if completed.returncode:
+            report_path = cache_root / "global-skill-regression" / "latest.json"
+            if report_path.is_file() and not report_path.is_symlink() and report_path.stat().st_size <= 2 * 1024 * 1024:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                failed = [check for check in report.get("checks", []) if check.get("status") != "pass"]
+                print(json.dumps({"failed_checks": failed}, ensure_ascii=False))
+    if completed.stdout.strip():
+        print(completed.stdout.strip())
+    if completed.returncode != 0:
+        details = completed.stderr.strip() or completed.stdout.strip() or "no gate output"
+        raise RuntimeError(f"Refusing release because the retained-capability regression gate failed in {mode} mode:\n{details}")
+    return completed
+
+
+def project_cache_root():
+    configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    path = validate_task_directory(configured, DEFAULT_PROJECT_ROOT) if configured else resolve_task_artifact_root(DEFAULT_PROJECT_ROOT, "management-skill-sync")
+    verify_cache_git(DEFAULT_PROJECT_ROOT, path)
+    return path
+
+
+@contextmanager
+def temporary_workspace(prefix):
+    configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    with task_artifact_scope(DEFAULT_PROJECT_ROOT, "management-skill-sync", borrowed_root=configured) as cache_root:
+        verify_cache_git(DEFAULT_PROJECT_ROOT, cache_root)
+        with tempfile.TemporaryDirectory(prefix=prefix if prefix.startswith("temp-") else f"temp-{prefix}", dir=cache_root) as workspace:
+            yield Path(workspace)
+
+
+def repository_git_url(repository, read_only=False):
+    if repository.startswith(("git@", "ssh://", "https://")):
+        return repository
+    if shutil.which("gh"):
+        url_field = "url" if read_only else "sshUrl"
+        try:
+            resolved_url = run_command(["gh", "repo", "view", repository, "--json", url_field, "--jq", f".{url_field}"]).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            resolved_url = ""
+        if resolved_url:
+            return resolved_url
+    return f"https://github.com/{repository}.git" if read_only else f"git@github.com:{repository}.git"
+
+
+def clone_repository(repository, sandbox, read_only=False):
+    repository_dir = sandbox / "repo"
+    run_command(["git", "clone", "--depth", "1", repository_git_url(repository, read_only=read_only), str(repository_dir)])
+    return repository_dir
+
+
+def repository_head(repository_dir):
+    return run_command(["git", "rev-parse", "HEAD"], cwd=repository_dir).stdout.strip()
+
+
+def repository_timestamp(repository_dir):
+    return int(run_command(["git", "log", "-1", "--format=%ct"], cwd=repository_dir).stdout.strip())
+
+
+def ignored_names(directory, names):
+    return {name for name in names if name in EXCLUDED_PARTS or name.endswith(EXCLUDED_SUFFIXES)}
+
+
+def symlink_issues(paths):
+    issues = []
+    for root in paths:
+        _, root_issues = _scan_tree(Path(root))
+        issues.extend(root_issues)
+    return sorted(issues, key=lambda path: path.as_posix())
+
+
+def _scan_tree(root):
+    files = []
+    issues = []
+    if root.is_symlink():
+        return files, [root]
+    if not root.exists():
+        return files, issues
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                path = directory / entry.name
+                if entry.is_symlink():
+                    issues.append(path)
+                    continue
+                relative_path = path.relative_to(root)
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+                elif not any(part in EXCLUDED_PARTS for part in relative_path.parts) and not path.name.endswith(EXCLUDED_SUFFIXES) and entry.is_file(follow_symlinks=False):
+                    files.append(path)
+    return files, issues
+
+
+def assert_no_symlinks(paths, label="skill source tree"):
+    issues = symlink_issues(paths)
+    if issues:
+        message = f"Refusing {label} containing symlinks:\n"
+        message += "\n".join(f"- {path}" for path in issues)
+        raise RuntimeError(message)
+
+
+def all_skill_directories(skills_dir):
+    return sorted([path for path in skills_dir.iterdir() if path.is_dir() and not path.name.startswith(".") and (path / "SKILL.md").exists()], key=lambda path: path.name)
+
+
+def skill_directories(skills_dir):
+    return [skills_dir / name for name in PRIMARY_SKILL_ORDER if (skills_dir / name / "SKILL.md").exists()]
+
+
+def included_files(skill_dir):
+    skill_dir = Path(skill_dir)
+    files, issues = _scan_tree(skill_dir)
+    if issues:
+        message = f"Refusing skill tree containing symlinks:\n"
+        message += "\n".join(f"- {path}" for path in sorted(issues, key=lambda path: path.as_posix()))
+        raise RuntimeError(message)
+    return sorted(files, key=lambda path: path.relative_to(skill_dir).as_posix())
+
+
+def sensitive_name(relative_path):
+    lower_path = relative_path.as_posix().lower()
+    lower_name = relative_path.name.lower()
+    return any(fnmatch.fnmatch(lower_name, pattern) or fnmatch.fnmatch(lower_path, pattern) for pattern in SENSITIVE_NAME_PATTERNS)
+
+
+def secret_value_issue(path):
+    try:
+        text = path.read_text(errors="ignore")
+    except UnicodeDecodeError:
+        return ""
+    for pattern in SECRET_VALUE_PATTERNS:
+        if pattern.search(text):
+            return pattern.pattern
+    return ""
+
+
+def public_safety_issues(skill_paths):
+    issues = []
+    for skill_path in skill_paths:
+        files, symlink_paths = _scan_tree(skill_path)
+        for symlink_path in symlink_paths:
+            try:
+                relative_path = symlink_path.relative_to(skill_path)
+            except ValueError:
+                relative_path = Path(symlink_path.name)
+            issues.append(f"{skill_path.name}/{relative_path.as_posix()}: symlink")
+        if symlink_paths:
+            continue
+        for path in sorted(files, key=lambda path: path.relative_to(skill_path).as_posix()):
+            relative_path = path.relative_to(skill_path)
+            mirror_path = f"{skill_path.name}/{relative_path.as_posix()}"
+            if sensitive_name(relative_path):
+                issues.append(f"{mirror_path}: sensitive filename")
+                continue
+            matched_pattern = secret_value_issue(path)
+            if matched_pattern:
+                issues.append(f"{mirror_path}: secret-like content matched {matched_pattern}")
+    return issues
+
+
+def assert_public_safe(skill_paths):
+    issues = public_safety_issues(skill_paths)
+    if issues:
+        message = "Refusing to push private or secret-looking data to the public skill mirror:\n"
+        message += "\n".join(f"- {issue}" for issue in issues)
+        raise RuntimeError(message)
+
+
+def assert_approved_global_skill_set(skill_paths):
+    observed_names = {path.name for path in skill_paths}
+    unexpected_names = sorted(observed_names - APPROVED_GLOBAL_SKILL_NAMES)
+    missing_names = sorted(APPROVED_GLOBAL_SKILL_NAMES - observed_names)
+    if unexpected_names or missing_names:
+        message = "Refusing to mirror global skills because the approved mirror selection must contain exactly:\n"
+        message += "\n".join(f"- {skill_name}" for skill_name in PRIMARY_SKILL_ORDER)
+        if unexpected_names:
+            message += "\nUnexpected folders found:\n" + "\n".join(f"- {skill_name}" for skill_name in unexpected_names)
+        if missing_names:
+            message += "\nRequired folders missing:\n" + "\n".join(f"- {skill_name}" for skill_name in missing_names)
+        message += "\nUnrelated local skill folders are intentionally ignored and preserved. Check the approved eight before publishing."
+        raise RuntimeError(message)
+
+
+def assert_repository_skill_set(repository_dir):
+    observed_names = {path.name for path in all_skill_directories(repository_dir)}
+    if observed_names != APPROVED_GLOBAL_SKILL_NAMES:
+        unexpected_names = sorted(observed_names - APPROVED_GLOBAL_SKILL_NAMES)
+        missing_names = sorted(APPROVED_GLOBAL_SKILL_NAMES - observed_names)
+        message = "Refusing to pull because the remote mirror must contain exactly the approved eight skills."
+        if unexpected_names:
+            message += "\nUnexpected remote skills:\n" + "\n".join(f"- {name}" for name in unexpected_names)
+        if missing_names:
+            message += "\nMissing remote skills:\n" + "\n".join(f"- {name}" for name in missing_names)
+        raise RuntimeError(message)
+
+
+def snapshot_hash(skill_paths):
+    digest = hashlib.sha256()
+    for skill_path in skill_paths:
+        digest.update(f"skill:{skill_path.name}\n".encode())
+        for path in included_files(skill_path):
+            digest.update(f"file:{skill_path.name}/{path.relative_to(skill_path).as_posix()}\n".encode())
+            digest.update(path.read_bytes())
+            digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def latest_local_timestamp(skill_paths):
+    latest_timestamp = 0
+    for skill_path in skill_paths:
+        for path in included_files(skill_path):
+            latest_timestamp = max(latest_timestamp, int(path.stat().st_mtime))
+    return latest_timestamp
+
+
+def read_sync_state(state_file):
+    if not state_file.exists():
+        return {}
+    return json.loads(state_file.read_text())
+
+
+def sync_state_file():
+    configured = os.environ.get("CODEX_PROJECT_CACHE_ROOT")
+    return validate_task_directory(configured, DEFAULT_PROJECT_ROOT) / DEFAULT_CACHE_ROOT.name / "state" / "management-skill-sync.json" if configured else DEFAULT_STATE_FILE
+
+
+def write_sync_state(state_file, repository, remote_head, local_hash, remote_hash):
+    validate_task_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
+    verify_cache_git(DEFAULT_PROJECT_ROOT, state_file.parent)
+    if state_file in SYNC_STATE_RECEIPTS and (state_file.is_symlink() or state_file.read_bytes() != SYNC_STATE_RECEIPTS[state_file]):
+        raise RuntimeError("Sync receipt changed after this runtime wrote it")
+    directories = [state_file.parent, state_file.parent.parent] if state_file.parent.parent.name == DEFAULT_CACHE_ROOT.name else [state_file.parent]
+    SYNC_STATE_DIRECTORIES.update(directory for directory in directories if not directory.exists())
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    receipt = (json.dumps({"repository": repository, "remote_head": remote_head, "local_hash": local_hash, "remote_hash": remote_hash, "synced_at": int(time.time())}, indent=2) + "\n").encode("utf-8")
+    with state_file.open("wb" if state_file in SYNC_STATE_RECEIPTS else "xb") as stream:
+        stream.write(receipt)
+    SYNC_STATE_RECEIPTS[state_file] = receipt
+
+
+def cleanup_sync_state():
+    for state_file, receipt in list(SYNC_STATE_RECEIPTS.items()):
+        try:
+            validate_task_directory(state_file.parent, DEFAULT_PROJECT_ROOT)
+            if state_file.is_symlink():
+                raise ValueError("Sync receipt became a symbolic link")
+            if state_file.exists():
+                if state_file.read_bytes() != receipt:
+                    raise RuntimeError("Sync receipt changed after this runtime wrote it")
+                state_file.unlink()
+            del SYNC_STATE_RECEIPTS[state_file]
+        except (OSError, ValueError, RuntimeError) as error:
+            print(f"Sync receipt cleanup pending: {state_file} ({error.__class__.__name__}).")
+    for directory in sorted(SYNC_STATE_DIRECTORIES, key=lambda path: len(path.parts), reverse=True):
+        try:
+            validate_task_directory(directory, DEFAULT_PROJECT_ROOT)
+            if directory.exists():
+                directory.rmdir()
+            SYNC_STATE_DIRECTORIES.remove(directory)
+        except (OSError, ValueError, RuntimeError) as error:
+            print(f"Sync receipt directory cleanup pending: {directory} ({error.__class__.__name__}).")
+
+
+atexit.register(cleanup_sync_state)
+
+
+def read_skill_metadata(skill_dir):
+    frontmatter_lines = []
+    in_frontmatter = False
+    for line in (skill_dir / "SKILL.md").read_text().splitlines():
+        if line == "---":
+            if in_frontmatter:
+                break
+            in_frontmatter = True
+            continue
+        if in_frontmatter:
+            frontmatter_lines.append(line)
+    metadata = {}
+    current_key = ""
+    for line in frontmatter_lines:
+        if line.startswith("  ") and current_key:
+            metadata[current_key] = f"{metadata[current_key]} {line.strip()}".strip()
+            continue
+        if ": " in line:
+            current_key, current_value = line.split(": ", 1)
+            metadata[current_key] = current_value.strip().strip('"')
+    return metadata
+
+
+
+
+
+
+def build_readme(skill_paths, language="en", source_dir=None):
+    template_path = CHINESE_README_TEMPLATE if language == "zh" else ENGLISH_README_TEMPLATE
+    if source_dir is not None:
+        template_path = Path(source_dir) / "management-skill" / "assets" / "readme" / template_path.name
+    template = template_path.read_text(encoding="utf-8").rstrip() + "\n"
+    return template
+
+
+
+def readme_language_for_output(output_path):
+    return "zh" if Path(output_path).name.lower().endswith(".zh.md") else "en"
+
+
+def skill_category(skill_name, description):
+    text = f"{skill_name} {description}".lower()
+    if skill_name in {"task-analyze-skill", "workflow-skill"}:
+        return "Workflow"
+    if skill_name == "code-skill":
+        return "Code"
+    if skill_name == "optimization-skill":
+        return "Optimization"
+    if skill_name in {"management-skill", "project-memory-skill"}:
+        return "Management"
+    if "github" in text or "auth" in text:
+        return "Management"
+    if skill_name == "verify-skill":
+        return "Verification"
+    if "testing" in text or "report" in text:
+        return "Verification"
+    if "verify" in text or "validation" in text:
+        return "Verification"
+    if "optimization" in text or "optimize" in text:
+        return "Optimization"
+    if "prompt" in text or "generate" in text:
+        return "Generation"
+    if "code-related" in text or "coding" in text:
+        return "Code"
+    return "General"
+
+
+def mermaid_id(*values):
+    return re.sub(r"[^A-Za-z0-9_]+", "_", "_".join(values)).strip("_")
+
+
+def mermaid_label(value):
+    return str(value).replace('"', "'")
+
+
+def display_width(value):
+    return sum(2 if ord(character) > 127 else 1 for character in str(value))
+
+
+def padded_label(value, target_width):
+    label = mermaid_label(value)
+    missing_width = max(0, target_width - display_width(label))
+    side_padding = "&emsp;" * max(1, (missing_width + 3) // 4)
+    return f"{side_padding}{label}{side_padding}"
+
+
+def ordered_primary_rows(rows):
+    rows_by_skill = {row[1]: row for row in rows}
+    return [rows_by_skill[skill_name] for skill_name in PRIMARY_SKILL_ORDER if skill_name in rows_by_skill]
+
+
+def short_description(description):
+    first_use_split = description.split(". Use ", 1)[0].strip()
+    if first_use_split:
+        return first_use_split if first_use_split.endswith(".") else f"{first_use_split}."
+    first_sentence = description.split(".", 1)[0].strip()
+    return f"{first_sentence}." if first_sentence else "No description provided."
+
+
+def inline_contents(skill_name, language="en"):
+    contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
+    return "<br>".join(f"**{content_name}**: {content_description}" for content_name, content_description in contents_map.get(skill_name, []))
+
+
+def skill_modules(skill_name, language="en"):
+    contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
+    module_names = [content_name for content_name, _ in contents_map.get(skill_name, [])]
+    if not module_names:
+        return "Read the skill body." if language == "en" else "查看 skill 正文。"
+    return "; ".join(module_names)
+
+
+def skill_role(skill_name, language="en"):
+    if language == "zh":
+        if skill_name == "task-analyze-skill":
+            return "任务目标与实现步骤"
+        return "执行协调" if skill_name == "workflow-skill" else "领域工作规则"
+    if skill_name == "task-analyze-skill":
+        return "Task goals and implementation steps"
+    return "Execution coordination" if skill_name == "workflow-skill" else "Domain work guidance"
+
+
+def skill_summary_lines(skill_name, description, language="en"):
+    summaries = CHINESE_SKILL_SUMMARIES if language == "zh" else SKILL_SUMMARIES
+    summary = summaries.get(skill_name, short_description(description))
+    if language == "zh":
+        return [
+            f"- **角色：** {skill_role(skill_name, language)}",
+            f"- **大功能：** {summary}",
+            f"- **可多选模块：** {skill_modules(skill_name, language)}",
+            "- **选择规则：** 需要哪个模块就用哪个；同一个任务可以同时使用多个模块，不是单选，也不要运行无关模块。",
+        ]
+    return [
+        f"- **Role:** {skill_role(skill_name, language)}",
+        f"- **Big function:** {summary}",
+        f"- **Selectable modules (multi-select):** {skill_modules(skill_name, language)}",
+        "- **Selection rule:** Use every module that applies to the task; this is not one-of, and unrelated modules should not run.",
+    ]
+
+
+def build_skill_summary_table(rows, language="en"):
+    category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
+    title = "### Skill Contents At A Glance" if language == "en" else "### Skill 内容一览"
+    lines = [
+        title,
+        "",
+    ]
+    for row in rows:
+        category, skill_name, description = row[:3]
+        folder_name = row[3] if len(row) > 3 else skill_name
+        skill_link = f"[`{skill_name}`](./{folder_name}/)"
+        lines.extend([f"#### {skill_link} · {category_labels.get(category, category)}", ""])
+        lines.extend(skill_summary_lines(skill_name, description, language))
+        lines.append("")
+    return lines
+
+
+def build_skill_graph(rows, language="en"):
+    contents_map = CHINESE_SKILL_CONTENTS if language == "zh" else SKILL_CONTENTS
+    lines = [
+        "```mermaid",
+        '%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 54, "wrappingWidth": 240}}}%%',
+        "flowchart LR",
+    ]
+    skill_ids = []
+    content_ids = []
+    for _category, skill_name, _description in rows:
+        skill_id = f"skill_{mermaid_id(skill_name)}"
+        content_id = f"inside_{mermaid_id(skill_name)}"
+        skill_ids.append(skill_id)
+        content_ids.append(content_id)
+        content_names = [content_name for content_name, _ in contents_map.get(skill_name, [])]
+        role_label = skill_role(skill_name, language)
+        content_label = "<br/>".join([role_label, ("可多选模块" if language == "zh" else "Multi-select routes"), *[mermaid_label(content_name) for content_name in content_names]])
+        lines.append(f'  {skill_id}["{mermaid_label(skill_name)}"] --> {content_id}["{content_label}"]')
+    lines.extend([
+        "  classDef skill fill:#111,color:#fff,stroke:#eee;",
+        "  classDef content fill:#2f2f2f,color:#fff,stroke:#666;",
+    ])
+    if skill_ids:
+        lines.append(f"  class {','.join(skill_ids)} skill;")
+    if content_ids:
+        lines.append(f"  class {','.join(content_ids)} content;")
+    lines.append("```")
+    return lines
+
+
+def build_support_skill_details(rows, language="en"):
+    support_rows = [row for row in rows if row[1] in SUPPORT_SKILL_NAMES]
+    if not support_rows:
+        return []
+    if language == "zh":
+        lines = [
+            "### 管理支持 Skill 内容",
+            "",
+            "这些也是真实同步到仓库的 skill，由 `management-skill` 调用，但不作为主图里的单独主入口展示。",
+            "",
+        ]
+    else:
+        lines = [
+            "### Management Support Skill Contents",
+            "",
+            "These are real mirrored skills used by `management-skill`, but they are not shown as separate primary map rows.",
+            "",
+        ]
+    for _, skill_name, description, folder_name in support_rows:
+        skill_title = f"[`{skill_name}`](./{folder_name}/)"
+        lines.extend([f"#### {skill_title}", ""])
+        lines.extend(skill_summary_lines(skill_name, description, language))
+        lines.append("")
+    return lines
+
+
+def workflow_lane_section(language="en"):
+    return ["## Workflow", "", "Brief goal and steps → execution → in-task verification → result → parallel memory and resource audit.", ""]
+
+
+
+def build_skill_details(rows, language="en"):
+    category_labels = CHINESE_CATEGORY_LABELS if language == "zh" else CATEGORY_LABELS
+    lines = [
+        "### 技能内容" if language == "zh" else "### Skill Contents",
+        "",
+    ]
+    for category in CATEGORY_ORDER:
+        category_rows = [row for row in rows if row[0] == category]
+        if not category_rows:
+            continue
+        lines.extend([f"#### {category_labels.get(category, category)}", ""])
+        for row in category_rows:
+            _, skill_name, description = row[:3]
+            folder_name = row[3] if len(row) > 3 else ""
+            skill_title = f"[`{skill_name}`](./{folder_name}/)" if folder_name else f"`{skill_name}`"
+            lines.extend([f"##### {skill_title}", ""])
+            lines.extend(skill_summary_lines(skill_name, description, language))
+            lines.append("")
+    return lines
+
+
+def copy_skill_directory(source_dir, target_dir, preserve_local=False):
+    assert_no_symlinks([source_dir], "source skill tree")
+    if target_dir.exists() or target_dir.is_symlink():
+        assert_no_symlinks([target_dir], "target skill tree")
+    local_source = target_dir / "local"
+    if preserve_local and local_source.exists():
+        assert_no_symlinks([local_source], "preserved local content")
+        with temporary_workspace("qin-codex-private-local-") as sandbox:
+            preserved_local = sandbox / "local"
+            shutil.copytree(local_source, preserved_local)
+            shutil.rmtree(target_dir)
+            shutil.copytree(source_dir, target_dir, ignore=ignored_names)
+            shutil.copytree(preserved_local, target_dir / "local")
+        return
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
+    shutil.copytree(source_dir, target_dir, ignore=ignored_names)
+
+
+def path_differs(source_dir, target_dir):
+    if not target_dir.exists():
+        return True
+    with temporary_workspace("qin-codex-skills-diff-") as sandbox:
+        copy_skill_directory(source_dir, sandbox / "source")
+        copy_skill_directory(target_dir, sandbox / "target")
+        return subprocess.run(["git", "diff", "--no-index", "--quiet", str(sandbox / "source"), str(sandbox / "target")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **hidden_process_options()).returncode != 0
+
+
+def canonical_global_agents_text(source_dir):
+    asset_path = Path(source_dir).expanduser().resolve() / GLOBAL_AGENTS_ASSET
+    if not asset_path.is_file():
+        raise RuntimeError(f"global AGENTS entry asset is missing: {asset_path}")
+    text = asset_path.read_text(encoding="utf-8")
+    if not text.startswith(GLOBAL_AGENTS_DIRECTIVE):
+        raise RuntimeError("global AGENTS entry asset is missing its merge directive")
+    rendered = text[len(GLOBAL_AGENTS_DIRECTIVE):]
+    if not rendered.startswith("# Task Lifecycle\n"):
+        raise RuntimeError("global AGENTS entry asset does not render the Task Lifecycle contract")
+    return rendered
+
+
+def materialized_global_agents_text(source_dir):
+    asset_path = Path(source_dir).expanduser().resolve() / GLOBAL_AGENTS_ASSET
+    if not asset_path.is_file():
+        raise RuntimeError(f"global AGENTS entry bytes are unavailable: {asset_path}")
+    text = asset_path.read_text(encoding="utf-8")
+    return text[len(GLOBAL_AGENTS_DIRECTIVE):] if text.startswith(GLOBAL_AGENTS_DIRECTIVE) else text
+
+
+def ai_index_startup_rule(source_dir):
+    text = canonical_global_agents_text(source_dir)
+    if text.count(AI_INDEX_STARTUP_START) != 1 or text.count(AI_INDEX_STARTUP_END) != 1:
+        raise RuntimeError("The global AGENTS template must contain one AI-index startup block")
+    start, end = text.index(AI_INDEX_STARTUP_START), text.index(AI_INDEX_STARTUP_END)
+    if end < start:
+        raise RuntimeError("The global AGENTS AI-index startup markers are reversed")
+    return text[start:end + len(AI_INDEX_STARTUP_END)]
+
+
+def merge_ai_index_startup(existing, rule):
+    counts = existing.count(AI_INDEX_STARTUP_START), existing.count(AI_INDEX_STARTUP_END)
+    if counts == (0, 0):
+        return rule + "\n\n" + existing
+    if counts != (1, 1) or existing.index(AI_INDEX_STARTUP_END) < existing.index(AI_INDEX_STARTUP_START):
+        raise RuntimeError("Existing global AGENTS has ambiguous AI-index startup markers; preserve it and resolve the block first")
+    start, end = existing.index(AI_INDEX_STARTUP_START), existing.index(AI_INDEX_STARTUP_END) + len(AI_INDEX_STARTUP_END)
+    return existing[:start] + rule + existing[end:]
+
+
+def ai_index_startup_status(source_dir):
+    root = codex_home()
+    override = root / "AGENTS.override.md"
+    if os.path.lexists(override) and (not override.is_file() or override.is_symlink() or override.read_text(encoding="utf-8").strip()):
+        return "shadowed_by_global_override"
+    target = root / "AGENTS.md"
+    if not target.is_file() or target.is_symlink():
+        return "missing_global_entry"
+    return "ready" if ai_index_startup_rule(source_dir) in target.read_text(encoding="utf-8") else "startup_rule_missing_or_stale"
+
+
+def inline_closeout_rule(source_dir):
+    text = canonical_global_agents_text(source_dir)
+    if text.count(INLINE_CLOSEOUT_START) != 1 or text.count(INLINE_CLOSEOUT_END) != 1 or text.index(INLINE_CLOSEOUT_END) < text.index(INLINE_CLOSEOUT_START):
+        raise RuntimeError("The global AGENTS template must contain one ordered inline closeout block")
+    return text[text.index(INLINE_CLOSEOUT_START):text.index(INLINE_CLOSEOUT_END) + len(INLINE_CLOSEOUT_END)]
+
+
+def merge_inline_closeout(existing, rule):
+    counts = existing.count(INLINE_CLOSEOUT_START), existing.count(INLINE_CLOSEOUT_END)
+    if counts == (1, 1) and existing.index(INLINE_CLOSEOUT_START) < existing.index(INLINE_CLOSEOUT_END):
+        start, end = existing.index(INLINE_CLOSEOUT_START), existing.index(INLINE_CLOSEOUT_END) + len(INLINE_CLOSEOUT_END)
+        outside = existing[:start] + existing[end:]
+        if any(paragraph.startswith(LEGACY_CLOSEOUT_PREFIXES) for paragraph in outside.split("\n\n")):
+            raise RuntimeError("Existing global AGENTS has conflicting legacy Ending rules outside its closeout block")
+        return existing[:start] + rule + existing[end:]
+    if counts != (0, 0):
+        raise RuntimeError("Existing global AGENTS has ambiguous inline closeout markers; preserve it and resolve the block first")
+    legacy = [paragraph for paragraph in existing.split("\n\n") if paragraph.startswith(LEGACY_CLOSEOUT_PREFIXES)]
+    if len(legacy) > 1:
+        raise RuntimeError("Existing global AGENTS has ambiguous legacy Ending rules; preserve it and resolve them first")
+    return existing.replace(legacy[0], rule, 1) if legacy else rule + "\n\n" + existing
+
+
+def inline_closeout_status(source_dir):
+    root = codex_home()
+    override = root / "AGENTS.override.md"
+    if os.path.lexists(override) and (not override.is_file() or override.is_symlink() or override.read_text(encoding="utf-8").strip()):
+        return "shadowed_by_global_override"
+    target = root / "AGENTS.md"
+    if not target.is_file() or target.is_symlink():
+        return "missing_global_entry"
+    existing = target.read_text(encoding="utf-8")
+    if any(paragraph.startswith(LEGACY_CLOSEOUT_PREFIXES) for paragraph in existing.split("\n\n")):
+        return "legacy_closeout_rule_present"
+    return "ready" if inline_closeout_rule(source_dir) in existing else "inline_closeout_rule_missing_or_stale"
+
+
+def codex_home():
+    """Resolve Codex configuration independently from the user Skill directory."""
+    return lexical_absolute_path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+
+
+def global_agents_targets(skills_dir):
+    """Keep the existing call signature; Skills do not own Codex instructions."""
+    return [codex_home() / "AGENTS.md"]
+
+
+def legacy_global_agents_targets(skills_dir):
+    """Return targets written by installer manifests created before schema version 2."""
+    skills_root = lexical_absolute_path(skills_dir)
+    codex_root = skills_root.parent
+    targets = [codex_root / "AGENTS.md"]
+    if codex_root.name == ".codex":
+        targets.append(codex_root.parent / "AGENTS.md")
+    return targets
+
+
+def global_agents_backup_root(skills_dir):
+    return codex_home() / GLOBAL_AGENTS_BACKUP_DIRECTORY
+
+
+def global_agents_target_matches(target, expected_text):
+    if not os.path.lexists(target) or target.is_symlink() or not stat.S_ISREG(target.lstat().st_mode):
+        return False
+    return target.read_text(encoding="utf-8") == expected_text
+
+
+def create_global_agents_backup(skills_dir, target):
+    backup_root = global_agents_backup_root(skills_dir)
+    backup_root.mkdir(parents=True, exist_ok=True)
+    backup_dir = Path(tempfile.mkdtemp(prefix="agents-", dir=backup_root))
+    target_existed = os.path.lexists(target)
+    manifest = {"schema_version": 1, "target": str(target), "target_existed": target_existed, "state": "prepared", "created_at": time.time(), "previous_entry": "previous"}
+    write_atomic_json(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST, manifest)
+    return backup_dir, manifest
+
+
+def load_global_agents_backup(skills_dir, backup_id):
+    if not re.fullmatch(r"agents-[A-Za-z0-9._-]+", backup_id):
+        raise RuntimeError("The global AGENTS backup ID is invalid.")
+    backup_dir = global_agents_backup_root(skills_dir) / backup_id
+    if not real_directory_entry(backup_dir):
+        raise RuntimeError("The requested global AGENTS backup is unavailable or unsafe.")
+    manifest = read_json_if_available(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST)
+    target = global_agents_targets(skills_dir)[0]
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 or manifest.get("target") != str(target) or not isinstance(manifest.get("target_existed"), bool) or manifest.get("previous_entry") != "previous":
+        raise RuntimeError("The requested global AGENTS backup manifest does not match this Skill root.")
+    return backup_dir, manifest, target
+
+
+def _write_global_agents_target(target, rendered):
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".AGENTS.md.", suffix=".temp", dir=target.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, target)
+    finally:
+        if os.path.exists(temporary_name):
+            os.unlink(temporary_name)
+
+
+def install_global_agents(source_dir, skills_dir, *, startup_only=False, closeout_only=False):
+    source_dir = Path(source_dir).expanduser().resolve()
+    skills_dir = lexical_absolute_path(skills_dir)
+    expected_text = canonical_global_agents_text(source_dir)
+    target = global_agents_targets(skills_dir)[0]
+    with installation_lock(target):
+        if startup_only and closeout_only:
+            raise RuntimeError("Select only one partial global AGENTS installation mode")
+        if startup_only or closeout_only:
+            if os.path.lexists(target) and (target.is_symlink() or not target.is_file()):
+                raise RuntimeError("Partial installation requires a regular global AGENTS file or an absent target")
+            existing = target.read_text(encoding="utf-8") if target.exists() else ""
+            expected_text = merge_inline_closeout(existing, inline_closeout_rule(source_dir)) if closeout_only else merge_ai_index_startup(existing, ai_index_startup_rule(source_dir))
+        if global_agents_target_matches(target, expected_text):
+            return {"changed": False, "backup_id": None, "target": target}
+        backup_dir, manifest = create_global_agents_backup(skills_dir, target)
+        previous_entry = backup_dir / manifest["previous_entry"]
+        try:
+            if manifest["target_existed"]:
+                replace_path_entry(target, previous_entry)
+            _write_global_agents_target(target, expected_text)
+            manifest["state"] = "installed"
+            manifest["installed_at"] = time.time()
+            write_atomic_json(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST, manifest)
+        except Exception as install_error:
+            try:
+                failed_entry = backup_dir / "failed-install"
+                if os.path.lexists(target):
+                    replace_path_entry(target, failed_entry)
+                if manifest["target_existed"] and os.path.lexists(previous_entry):
+                    replace_path_entry(previous_entry, target)
+                manifest["state"] = "restored"
+                manifest["restored_at"] = time.time()
+                write_atomic_json(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST, manifest)
+            except Exception as restore_error:
+                raise RuntimeError(f"Global AGENTS installation failed and its persistent backup could not be restored: {restore_error}") from install_error
+            raise RuntimeError("Global AGENTS installation failed; the previous target was restored from its persistent backup.") from install_error
+    return {"changed": True, "backup_id": backup_dir.name, "target": target}
+
+
+def restore_global_agents_backup(skills_dir, backup_id):
+    skills_dir = lexical_absolute_path(skills_dir)
+    with installation_lock(global_agents_targets(skills_dir)[0]):
+        backup_dir, manifest, target = load_global_agents_backup(skills_dir, backup_id)
+        if manifest.get("state") == "restored":
+            return {"changed": False, "backup_id": backup_id, "target": target}
+        if manifest.get("state") != "installed":
+            raise RuntimeError("The requested global AGENTS backup is not in a restorable installed state.")
+        previous_entry = backup_dir / manifest["previous_entry"]
+        if manifest["target_existed"] and not os.path.lexists(previous_entry):
+            raise RuntimeError("The requested global AGENTS backup is missing its preserved original target.")
+        replaced_entry = backup_dir / "replaced-on-restore"
+        if os.path.lexists(replaced_entry):
+            raise RuntimeError("The requested global AGENTS backup already contains a replacement from a prior restore attempt.")
+        try:
+            if os.path.lexists(target):
+                replace_path_entry(target, replaced_entry)
+            if manifest["target_existed"]:
+                replace_path_entry(previous_entry, target)
+            manifest["state"] = "restored"
+            manifest["restored_at"] = time.time()
+            write_atomic_json(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST, manifest)
+        except Exception as restore_error:
+            raise RuntimeError(f"Global AGENTS restore failed; the persistent backup remains available: {restore_error}") from restore_error
+    return {"changed": True, "backup_id": backup_id, "target": target}
+
+
+def list_global_agents_backups(skills_dir):
+    backup_root = global_agents_backup_root(skills_dir)
+    if not backup_root.is_dir():
+        return []
+    backups = []
+    for backup_dir in sorted(backup_root.iterdir(), key=lambda path: path.name):
+        if not real_directory_entry(backup_dir):
+            continue
+        manifest = read_json_if_available(backup_dir / GLOBAL_AGENTS_BACKUP_MANIFEST)
+        if isinstance(manifest, dict):
+            backups.append({"id": backup_dir.name, "state": manifest.get("state", "invalid"), "target_existed": manifest.get("target_existed")})
+    return backups
+
+
+def deploy_global_agents(source_dir, skills_dir):
+    return install_global_agents(source_dir, skills_dir)["changed"]
+
+
+def global_agents_parity(source_dir, skills_dir):
+    expected = canonical_global_agents_text(source_dir)
+    targets = global_agents_targets(skills_dir)
+    missing = [str(target) for target in targets if not target.is_file()]
+    different = [str(target) for target in targets if target.is_file() and target.read_text(encoding="utf-8") != expected]
+    target = targets[0]
+    if missing:
+        reason = f"global AGENTS.md is missing: {', '.join(missing)}"
+    elif different:
+        reason = f"global AGENTS.md differs from the installed Task Lifecycle asset: {', '.join(different)}"
+    else:
+        reason = None
+    return {
+        "status": "pass" if not missing and not different else "fail",
+        "target": str(target),
+        "targets": [str(target) for target in targets],
+        "reason": reason,
+    }
+
+
+def print_lines(title, lines):
+    print(title)
+    for line in lines:
+        print(f"- {line}")
+
+
+def real_directory_entry(path, *, require_exists=False):
+    if not require_exists and not os.path.lexists(path):
+        return False
+    path_status = Path(path).lstat()
+    reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    file_attributes = getattr(path_status, "st_file_attributes", 0)
+    return stat.S_ISDIR(path_status.st_mode) and not file_attributes & reparse_point
+
+
+def replace_path_entry(source, target):
+    source = Path(source)
+    target = Path(target)
+    transient_windows_errors = {5, 32, 33}
+    for attempt in range(5):
+        try:
+            os.replace(source, target)
+            return
+        except OSError as error:
+            retryable = os.name == "nt" and getattr(error, "winerror", None) in transient_windows_errors and attempt < 4
+            if not retryable:
+                raise
+            time.sleep(0.05 * (2 ** attempt))
+
+
+def write_atomic_json(path, payload):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".temp", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, path)
+    finally:
+        if os.path.exists(temporary_name):
+            os.unlink(temporary_name)
+
+
+def read_json_if_available(path):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def process_is_running(process_id):
+    if not isinstance(process_id, int) or process_id <= 0:
+        return False
+    if process_id == os.getpid():
+        return True
+    if os.name == "nt":
+        import ctypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        process_handle = kernel.OpenProcess(0x1000, False, process_id)
+        if process_handle:
+            kernel.CloseHandle(process_handle)
+            return True
+        return ctypes.get_last_error() == 5
+    try:
+        os.kill(process_id, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def try_create_installation_lock(lock_dir, token):
+    try:
+        lock_dir.mkdir()
+    except FileExistsError:
+        return False
+    write_atomic_json(lock_dir / "owner.json", {"pid": os.getpid(), "token": token, "created_at": time.time()})
+    return True
+
+
+def clear_stale_installation_lock(lock_dir):
+    try:
+        if not real_directory_entry(lock_dir, require_exists=True):
+            raise RuntimeError("The global Skill installation lock is not a safe real directory.")
+        owner = read_json_if_available(lock_dir / "owner.json")
+        if owner and process_is_running(owner.get("pid")):
+            return False
+        if owner is None and time.time() - lock_dir.stat().st_mtime < 1.0:
+            return False
+        shutil.rmtree(lock_dir)
+        return True
+    except FileNotFoundError:
+        return True
+
+
+def release_installation_lock(lock_dir, token):
+    owner = read_json_if_available(lock_dir / "owner.json")
+    if owner and owner.get("token") == token and real_directory_entry(lock_dir):
+        shutil.rmtree(lock_dir)
+
+
+@contextmanager
+def installation_lock(skills_dir, timeout_seconds=30.0):
+    lock_dir = lexical_absolute_path(skills_dir).parent / INSTALL_LOCK_NAME
+    lock_dir.parent.mkdir(parents=True, exist_ok=True)
+    token = f"{os.getpid()}-{time.time_ns()}"
+    deadline = time.monotonic() + timeout_seconds
+    while not try_create_installation_lock(lock_dir, token):
+        if clear_stale_installation_lock(lock_dir):
+            continue
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Another global Skill installation is still active; the safe target lock did not become available.")
+        time.sleep(0.1)
+    try:
+        yield
+    finally:
+        release_installation_lock(lock_dir, token)
+
+
+def cleanup_installation_workspace(transaction_root):
+    try:
+        shutil.rmtree(transaction_root)
+    except OSError as error:
+        print(f"Disposable installation workspace cleanup will be retried later ({error.__class__.__name__}).")
+
+
+def create_installation_workspace(skills_dir):
+    skills_parent = Path(skills_dir).parent
+    skills_parent.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=INSTALL_TRANSACTION_PREFIX, dir=skills_parent))
+
+
+def install_source_symlink_issues(source_dir):
+    source_dir = Path(source_dir)
+    if not real_directory_entry(source_dir):
+        return [source_dir]
+    issues = []
+    pending = [source_dir]
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if entry.name in ignored_names(directory, {entry.name}):
+                    continue
+                path = directory / entry.name
+                entry_status = entry.stat(follow_symlinks=False)
+                reparse_point = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+                file_attributes = getattr(entry_status, "st_file_attributes", 0)
+                if entry.is_symlink() or file_attributes & reparse_point:
+                    issues.append(path)
+                elif entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
+    return sorted(issues, key=lambda path: path.as_posix())
+
+
+def stage_skill_directory(source_dir, target_dir):
+    issues = install_source_symlink_issues(source_dir)
+    if issues:
+        details = "\n".join(f"- {path}" for path in issues)
+        raise RuntimeError(f"Managed source bytes cannot be materialized without following a symlink or junction:\n{details}")
+    shutil.copytree(source_dir, target_dir, ignore=ignored_names)
+
+
+def stage_installation_bundle(source_dir, skills_dir, transaction_root):
+    skill_paths = skill_directories(source_dir)
+    assert_approved_global_skill_set(skill_paths)
+    staged_skill_dir = transaction_root / "staged-skills"
+    staged_skill_paths = []
+    for source_path in skill_paths:
+        staged_path = staged_skill_dir / source_path.name
+        stage_skill_directory(source_path, staged_path)
+        staged_skill_paths.append(staged_path)
+    return {"skill_paths": staged_skill_paths, "agent_paths": []}
+
+
+def new_deployment_snapshot(skills_dir, transaction_root, bundle):
+    skills_dir = Path(skills_dir)
+    skills_dir_existed = os.path.lexists(skills_dir)
+    if skills_dir_existed and not real_directory_entry(skills_dir):
+        raise RuntimeError("The global Skill root cannot be replaced safely because it is not a real directory.")
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    targets = [("skill", skills_dir / path.name, path) for path in bundle["skill_paths"]]
+    targets.extend(("agents", target, staged_path) for target, staged_path in zip(global_agents_targets(skills_dir), bundle["agent_paths"]))
+    for index, (kind, target, staged_path) in enumerate(targets):
+        records.append({"kind": kind, "target": target, "staged": staged_path, "backup": transaction_root / "previous" / f"{index:02d}", "existed": os.path.lexists(target), "captured": False, "installed": False})
+    task_record = next(record for record in records if record["kind"] == "skill" and record["target"].name == "task-analyze-skill")
+    private_local_existed = real_directory_entry(task_record["target"]) and os.path.lexists(task_record["target"] / "local")
+    private_local = {"backup": task_record["backup"] / "local", "installed": task_record["target"] / "local", "existed": private_local_existed, "moved": False, "task_staged": task_record["staged"]}
+    return {"skills_dir": skills_dir, "skills_dir_existed": skills_dir_existed, "records": records, "transaction_root": transaction_root, "private_local": private_local, "global_agents_included": bool(bundle["agent_paths"])}
+
+
+def installation_manifest_payload(snapshot, state):
+    return {
+        "schema_version": 2,
+        "state": state,
+        "pid": os.getpid(),
+        "skills_dir": str(snapshot["skills_dir"]),
+        "skills_dir_existed": snapshot["skills_dir_existed"],
+        "global_agents_included": snapshot["global_agents_included"],
+        "records": [{"kind": record["kind"], "target": str(record["target"]), "staged": str(record["staged"]), "backup": str(record["backup"]), "existed": record["existed"]} for record in snapshot["records"]],
+        "private_local": {"backup": str(snapshot["private_local"]["backup"]), "installed": str(snapshot["private_local"]["installed"]), "task_staged": str(snapshot["private_local"]["task_staged"]), "existed": snapshot["private_local"]["existed"]},
+        "updated_at": time.time(),
+    }
+
+
+def write_installation_manifest(snapshot, state):
+    write_atomic_json(snapshot["transaction_root"] / INSTALL_MANIFEST_NAME, installation_manifest_payload(snapshot, state))
+
+
+def validate_manifest_record(payload_record, expected_kind, expected_target, expected_staged, expected_backup):
+    expected = {"kind": expected_kind, "target": str(expected_target), "staged": str(expected_staged), "backup": str(expected_backup)}
+    if not isinstance(payload_record, dict) or any(payload_record.get(key) != value for key, value in expected.items()) or not isinstance(payload_record.get("existed"), bool):
+        raise RuntimeError("An interrupted global Skill installation manifest contains unsafe target data.")
+
+
+def snapshot_from_installation_manifest(transaction_root, payload, skills_dir):
+    schema_version = payload.get("schema_version")
+    if schema_version not in {1, 2} or payload.get("skills_dir") != str(skills_dir):
+        raise RuntimeError("An interrupted global Skill installation manifest does not match the requested target.")
+    payload_records = payload.get("records")
+    expected_targets = [("skill", skills_dir / name, transaction_root / "staged-skills" / name) for name in PRIMARY_SKILL_ORDER]
+    if schema_version == 1:
+        agent_targets = legacy_global_agents_targets(skills_dir)
+    elif payload.get("global_agents_included") is True:
+        # Historical schema-2 transactions derived AGENTS from their Skill root.
+        agent_targets = [skills_dir.parent / "AGENTS.md"]
+    else:
+        agent_targets = []
+    expected_targets.extend(("agents", target, transaction_root / "staged-agents" / f"{index}.md") for index, target in enumerate(agent_targets))
+    if not isinstance(payload_records, list) or len(payload_records) != len(expected_targets):
+        raise RuntimeError("An interrupted global Skill installation manifest has an incomplete managed target set.")
+    records = []
+    for index, ((kind, target, staged), payload_record) in enumerate(zip(expected_targets, payload_records)):
+        backup = transaction_root / "previous" / f"{index:02d}"
+        validate_manifest_record(payload_record, kind, target, staged, backup)
+        reverse_index = len(expected_targets) - 1 - index
+        restore_marker = transaction_root / "restore-markers" / f"{reverse_index:02d}.json"
+        restored = payload_record["existed"] and not os.path.lexists(backup) and os.path.lexists(restore_marker) and os.path.lexists(target)
+        record = {"kind": kind, "target": target, "staged": staged, "backup": backup, "existed": payload_record["existed"], "captured": os.path.lexists(backup), "installed": not os.path.lexists(staged) and not restored}
+        if record["existed"] and not os.path.lexists(staged) and not record["captured"] and not restored:
+            raise RuntimeError("An interrupted global Skill installation is missing a required recovery backup.")
+        records.append(record)
+    task_record = next(record for record in records if record["kind"] == "skill" and record["target"].name == "task-analyze-skill")
+    private_payload = payload.get("private_local", {})
+    expected_private = {"backup": str(task_record["backup"] / "local"), "installed": str(task_record["target"] / "local"), "task_staged": str(task_record["staged"])}
+    if any(private_payload.get(key) != value for key, value in expected_private.items()) or not isinstance(private_payload.get("existed"), bool):
+        raise RuntimeError("An interrupted global Skill installation manifest has unsafe private-local data.")
+    private_moved = private_payload["existed"] and not os.path.lexists(task_record["staged"]) and not os.path.lexists(task_record["backup"] / "local") and os.path.lexists(task_record["target"] / "local")
+    private_local = {"backup": task_record["backup"] / "local", "installed": task_record["target"] / "local", "task_staged": task_record["staged"], "existed": private_payload["existed"], "moved": private_moved}
+    return {"skills_dir": skills_dir, "skills_dir_existed": payload.get("skills_dir_existed") is True, "records": records, "transaction_root": transaction_root, "private_local": private_local, "global_agents_included": bool(agent_targets)}
+
+
+def capture_deployment_snapshot(snapshot):
+    for record in snapshot["records"]:
+        if not os.path.lexists(record["target"]):
+            continue
+        record["backup"].parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["target"], record["backup"])
+        record["captured"] = True
+
+
+def preserve_private_task_analyze_local(snapshot):
+    task_record = next(record for record in snapshot["records"] if record["kind"] == "skill" and record["target"].name == "task-analyze-skill")
+    private_local = snapshot["private_local"]
+    if not private_local["existed"] or not task_record["captured"] or not real_directory_entry(task_record["backup"]):
+        return
+    backup_local = private_local["backup"]
+    installed_local = private_local["installed"]
+    if not os.path.lexists(backup_local):
+        return
+    if os.path.lexists(installed_local):
+        raise RuntimeError("The provisional task-analyze-skill unexpectedly contains local state.")
+    replace_path_entry(backup_local, installed_local)
+    private_local["moved"] = True
+
+
+def inherit_installed_skill_permissions(skill_dir):
+    if sys.platform != "win32":
+        return
+    executable = shutil.which("icacls")
+    if executable is None:
+        raise RuntimeError("Windows Skill installation requires icacls to inherit destination permissions.")
+    # Python's private staging ACL survives a same-volume move. Reset only new
+    # managed bytes, before preserved private local state joins the installation.
+    completed = subprocess.run([executable, str(skill_dir), "/reset", "/T", "/Q"], text=True, capture_output=True, check=False, timeout=60, **hidden_process_options())
+    if completed.returncode != 0:
+        details = completed.stderr.strip() or completed.stdout.strip() or f"exit status {completed.returncode}"
+        raise RuntimeError(f"Windows Skill permissions could not inherit from the destination for {skill_dir}: {details}")
+
+
+def install_managed_skills(snapshot):
+    installed_names = []
+    installed_agents = 0
+    for record in snapshot["records"]:
+        record["target"].parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["staged"], record["target"])
+        record["installed"] = True
+        if record["kind"] == "skill":
+            inherit_installed_skill_permissions(record["target"])
+            installed_names.append(record["target"].name)
+        else:
+            installed_agents += 1
+    preserve_private_task_analyze_local(snapshot)
+    write_installation_manifest(snapshot, "active")
+    return installed_names, installed_agents
+
+
+def restore_captured_record(record, discard_path, restore_marker):
+    write_atomic_json(restore_marker, {"target": str(record["target"]), "started_at": time.time()})
+    provisional_moved = False
+    if record["installed"] and os.path.lexists(record["target"]):
+        discard_path.parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["target"], discard_path)
+        provisional_moved = True
+    try:
+        record["target"].parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["backup"], record["target"])
+    except Exception:
+        if provisional_moved and os.path.lexists(discard_path) and not os.path.lexists(record["target"]):
+            replace_path_entry(discard_path, record["target"])
+        raise
+    record["captured"] = False
+    record["installed"] = False
+
+
+def discard_new_record(record, discard_path):
+    if record["installed"] and os.path.lexists(record["target"]):
+        discard_path.parent.mkdir(parents=True, exist_ok=True)
+        replace_path_entry(record["target"], discard_path)
+    record["installed"] = False
+
+
+def restore_deployment_snapshot(snapshot):
+    private_local = snapshot["private_local"]
+    if private_local["moved"]:
+        if not os.path.lexists(private_local["installed"]):
+            raise RuntimeError("Preserved task-analyze-skill local state is unavailable during restore.")
+        replace_path_entry(private_local["installed"], private_local["backup"])
+        private_local["moved"] = False
+    discard_dir = snapshot["transaction_root"] / "discard"
+    for index, record in enumerate(reversed(snapshot["records"])):
+        if record["captured"]:
+            restore_captured_record(record, discard_dir / f"captured-{index:02d}", snapshot["transaction_root"] / "restore-markers" / f"{index:02d}.json")
+    for index, record in enumerate(reversed(snapshot["records"])):
+        if not record["captured"] and not record["existed"]:
+            discard_new_record(record, discard_dir / f"new-{index:02d}")
+    skills_dir = snapshot["skills_dir"]
+    if not snapshot["skills_dir_existed"] and real_directory_entry(skills_dir) and not any(skills_dir.iterdir()):
+        skills_dir.rmdir()
+
+
+def restore_installation_or_raise(snapshot, installation_error):
+    try:
+        restore_deployment_snapshot(snapshot)
+        write_installation_manifest(snapshot, "restored")
+    except Exception as restore_error:
+        raise RuntimeError(f"Provisional installation failed and automatic restore also failed; the recovery snapshot was retained. Failure: {restore_error}") from installation_error
+
+
+def recover_interrupted_installations(skills_dir):
+    skills_dir = lexical_absolute_path(skills_dir)
+    skills_parent = skills_dir.parent
+    if not skills_parent.is_dir():
+        return
+    for transaction_root in sorted(skills_parent.glob(f"{INSTALL_TRANSACTION_PREFIX}*")):
+        if not real_directory_entry(transaction_root):
+            raise RuntimeError("An installer-owned recovery entry is not a safe real directory.")
+        payload = read_json_if_available(transaction_root / INSTALL_MANIFEST_NAME)
+        if payload is None or payload.get("skills_dir") != str(skills_dir):
+            continue
+        state = payload.get("state")
+        if state in {"materializing", "committed", "restored"}:
+            cleanup_installation_workspace(transaction_root)
+            continue
+        if state not in {"prepared", "active"}:
+            raise RuntimeError("An interrupted global Skill installation has an unknown recovery state.")
+        snapshot = snapshot_from_installation_manifest(transaction_root, payload, skills_dir)
+        restore_deployment_snapshot(snapshot)
+        write_installation_manifest(snapshot, "restored")
+        cleanup_installation_workspace(transaction_root)
+
+
+@contextmanager
+def provisional_installation_transaction(source_dir, skills_dir):
+    with installation_lock(skills_dir):
+        recover_interrupted_installations(skills_dir)
+        transaction_root = create_installation_workspace(skills_dir)
+        snapshot = None
+        bundle_prepared = False
+        try:
+            write_atomic_json(transaction_root / INSTALL_MANIFEST_NAME, {"schema_version": 2, "state": "materializing", "pid": os.getpid(), "skills_dir": str(skills_dir), "global_agents_included": False, "updated_at": time.time()})
+            bundle = stage_installation_bundle(source_dir, skills_dir, transaction_root)
+            bundle_prepared = True
+            snapshot = new_deployment_snapshot(skills_dir, transaction_root, bundle)
+            write_installation_manifest(snapshot, "prepared")
+            capture_deployment_snapshot(snapshot)
+            yield snapshot
+            write_installation_manifest(snapshot, "committed")
+        except Exception as installation_error:
+            captured_count = sum(record["captured"] for record in snapshot["records"]) if snapshot is not None else 0
+            installed_count = sum(record["installed"] for record in snapshot["records"]) if snapshot is not None else 0
+            if snapshot is not None:
+                restore_installation_or_raise(snapshot, installation_error)
+            cleanup_installation_workspace(transaction_root)
+            if not bundle_prepared:
+                raise RuntimeError(f"Installation source bytes could not be materialized safely before replacement. Codex must repair the source and retry automatically. Failure: {installation_error}") from installation_error
+            if snapshot is None:
+                raise RuntimeError(f"A recoverable backup or safe exact-target write could not be prepared; no managed target was replaced. Codex must resolve the mechanical blocker and retry automatically. Failure: {installation_error}") from installation_error
+            raise RuntimeError(f"The provisional transaction failed after capturing {captured_count} target(s) and replacing {installed_count} target(s); the previous installation was restored. Codex must repair the maintained source and reinstall without asking the user to run a gate. Failure: {installation_error}") from installation_error
+        cleanup_installation_workspace(transaction_root)
+
+
+def mirror_repository_to_local(repository_dir, skills_dir):
+    return deploy(repository_dir, skills_dir)
+
+
+def deploy(source_dir, skills_dir):
+    source_dir = Path(source_dir).expanduser().resolve()
+    skills_dir = lexical_absolute_path(skills_dir)
+    if skills_dir == lexical_absolute_path(OFFICIAL_USER_SKILLS_DIRECTORY):
+        for candidate in (skills_dir, *skills_dir.parents):
+            if os.path.lexists(candidate) and not real_directory_entry(candidate):
+                raise RuntimeError(f"The official user Skill root cannot traverse a symbolic link, junction, or nondirectory: {candidate}")
+    with provisional_installation_transaction(source_dir, skills_dir) as snapshot:
+        installed_names, installed_agents = install_managed_skills(snapshot)
+        print_lines("Replaced managed repository Skills in the local global Skill directory:", installed_names)
+        if installed_agents:
+            print(f"Replaced {installed_agents} explicit global AGENTS.md target(s) with the repository Task Lifecycle contract.")
+    print("Preserved user global AGENTS.md files; use install-global-agents for an explicit, recoverable template installation.")
+    print("Installation complete: consumer install/update replaced the published managed source without rerunning validation gates.")
+    if skills_dir == lexical_absolute_path(OFFICIAL_USER_SKILLS_DIRECTORY):
+        startup_status = ai_index_startup_status(source_dir)
+        print(f"AI-index startup activation: {startup_status}. Skill installation alone does not reload instructions in existing sessions.")
+        if startup_status != "ready":
+            print("Mandatory startup reminders are pending. Explicitly install the preserved startup block with install-global-agents --source-dir SOURCE --startup-only; resolve a global override first if reported. Start a new Codex session to load it.")
+        closeout_status = inline_closeout_status(source_dir)
+        print(f"Inline closeout activation: {closeout_status}.")
+        if closeout_status != "ready":
+            print("Global closeout guidance needs an explicitly authorized repair: install-global-agents --source-dir SOURCE --closeout-only preserves unrelated guidance and replaces the recognized legacy Ending paragraph. Resolve any global override separately. Existing chats can retain old instructions; do not create a verification or Ending task.")
+        repair_legacy_user_skills(skills_dir, source_dir, installed_names)
+    return installed_names
+
+
+def repair_legacy_user_skills(skills_dir, source_dir, installed_names):
+    legacy = codex_home() / "skills"
+    try:
+        legacy.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        print(f"Legacy user Skill repair pending: {type(error).__name__}: {error}")
+        return
+    try:
+        script = Path(skills_dir) / "management-skill" / "scripts" / "repair_user_skill_root.py"
+        spec = importlib.util.spec_from_file_location("installed_user_skill_root_repair", script)
+        repair = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(repair)
+        result = repair.repair_user_skill_root(legacy_root=legacy, official_root=skills_dir, apply=True, source_dir=source_dir, authoritative_names=installed_names)
+        print(json.dumps({"legacy_user_skill_repair": result}, ensure_ascii=False))
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f"Legacy user Skill repair pending: {type(error).__name__}: {error}")
+
+
+def announce_memory_vault(skills_dir):
+    """Report an existing Obsidian vault without creating external resources."""
+    setup = Path(skills_dir).expanduser().resolve() / "project-memory-skill" / "scripts" / "obsidian_vault_setup.py"
+    if not setup.is_file():
+        print("Obsidian memory setup pending: the installed Project Memory setup script is unavailable.")
+        return
+    try:
+        completed = subprocess.run([sys.executable, "-B", str(setup), "--project-root", str(Path.cwd()), "--existing-only"], capture_output=True, text=True, check=False, timeout=180, **hidden_process_options())
+        result = json.loads(completed.stdout)
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+        print(f"Obsidian memory setup pending: {error.__class__.__name__}.")
+        return
+    if completed.returncode or result.get("status") not in {"ready", "created"}:
+        print(f"Obsidian memory setup pending: {result.get('reason', 'setup_failed')}.")
+        return
+    print(f"Obsidian memory vault: {result['vault']}")
+    if result["status"] == "created":
+        print("Open this folder as a vault in Obsidian.")
+    print(result["backup_message"])
+
+
+def remote_changes(repository, skills_dir):
+    with temporary_workspace("qin-codex-skills-") as sandbox:
+        repository_dir = clone_repository(repository, sandbox, read_only=True)
+        remote_by_name = {path.name: path for path in skill_directories(repository_dir)}
+        return [name for name in PRIMARY_SKILL_ORDER if name not in remote_by_name or path_differs(remote_by_name[name], skills_dir / name)]
+
+
+def preuse(repository, skills_dir):
+    changed_names = remote_changes(repository, skills_dir)
+    if changed_names:
+        print_lines("Remote skills differ from local global skills:", changed_names)
+        print("Run pull before using or editing these skills unless local edits must be preserved.")
+    else:
+        print("Remote global skills are already reflected locally.")
+
+
+def record_pull_state(repository, repository_dir, skills_dir):
+    try:
+        write_sync_state(sync_state_file(), repository, repository_head(repository_dir), "", "")
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        print(f"Installation complete; sync state could not be recorded ({error.__class__.__name__}).")
+        return False
+    return True
+
+
+def pull(repository, skills_dir):
+    with temporary_workspace("qin-codex-skills-") as sandbox:
+        repository_dir = clone_repository(repository, sandbox, read_only=True)
+        changed_names = mirror_repository_to_local(repository_dir, skills_dir)
+        record_pull_state(repository, repository_dir, skills_dir)
+        print_lines(f"Replaced managed remote skills in {skills_dir}:", changed_names)
+        return changed_names
+
+
+def prepare_repository_snapshot(repository_dir, skills_dir):
+    assert_no_symlinks([repository_dir], "repository tree")
+    skill_paths = skill_directories(skills_dir)
+    assert_approved_global_skill_set(skill_paths)
+    assert_no_symlinks(skill_paths, "approved source skill trees")
+    assert_public_safe(skill_paths)
+    checker_module = load_skill_platform_checker(skills_dir)
+    checker_module.assert_skill_platform_safe(skills_dir, Path(skills_dir) / "code-skill" / "assets" / "skill-platform-baseline.json", selected_skill_names=APPROVED_GLOBAL_SKILL_NAMES)
+    for path in repository_dir.iterdir():
+        if path.name == ".git":
+            continue
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    (repository_dir / ".gitignore").write_text(GITIGNORE_TEXT, encoding="utf-8")
+    copied_names = []
+    (repository_dir / "README.md").write_text(build_readme(skill_paths, language="en"), encoding="utf-8")
+    (repository_dir / "README.zh.md").write_text(build_readme(skill_paths, language="zh"), encoding="utf-8")
+    for path in skill_paths:
+        copy_skill_directory(path, repository_dir / path.name)
+        copied_names.append(path.name)
+    return copied_names
+
+
+def push_global_snapshot(repository, skills_dir, message, dry_run):
+    if not dry_run:
+        raise RuntimeError("Installed global Skills are not a publication source. Publish the maintained repository with the push command.")
+    with temporary_workspace("qin-codex-skills-") as sandbox:
+        repository_dir = clone_repository(repository, sandbox, read_only=True)
+        copied_names = prepare_repository_snapshot(repository_dir, skills_dir)
+        status_text = run_command(["git", "status", "--short"], cwd=repository_dir).stdout.strip()
+        print_lines("Local skills selected for mirror:", copied_names)
+        print(status_text or "No local-to-remote differences.")
+
+
+def source_repository_root(source_dir):
+    source_dir = Path(source_dir).expanduser().resolve()
+    try:
+        repository_root = Path(run_command(["git", "rev-parse", "--show-toplevel"], cwd=source_dir).stdout.strip()).resolve()
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(
+            f"Refusing to publish because the maintained source is not a Git repository: {source_dir}. "
+            "Run push from the maintained repository or pass --source-dir explicitly."
+        ) from error
+    if repository_root != source_dir:
+        raise RuntimeError(f"Refusing to publish a nested source path; expected repository root {repository_root}, got {source_dir}")
+    return repository_root
+
+
+def publishable_source_path(relative_path):
+    relative_path = Path(relative_path)
+    if relative_path.as_posix() in {
+        ".gitignore", "AGENTS.md", "README.md", "README.zh.md", ".github/workflows/ci.yml",
+        ".github/workflows/publish-plugin.yml", ".github/actions/publish-plugin/action.yml",
+        ".github/actions/publish-plugin/publish.py", "plugins/qin-codex-skills/plugin.json",
+        "plugins/qin-codex-skills/skills.json", ".agents/plugins/marketplace.json",
+    }:
+        return True
+    if relative_path.parts[:3] == ("plugins", "qin-codex-skills", "skills"):
+        from install_skill_pack import skill_file
+
+        if len(relative_path.parts) < 5 or relative_path.parts[3] not in APPROVED_GLOBAL_SKILL_NAMES:
+            return False
+        skill_relative = Path(*relative_path.parts[4:])
+        if not skill_file(skill_relative):
+            return False
+    elif relative_path.parts[:3] == PROJECT_TESTING_SKILL.parts:
+        skill_relative = Path(*relative_path.parts[3:])
+    elif any(relative_path.parts[:len(owner.parts)] == owner.parts for owner in (PROJECT_AI_INDEX_SKILL, LEGACY_PROJECT_AI_INDEX_SKILL)):
+        owner = next(owner for owner in (PROJECT_AI_INDEX_SKILL, LEGACY_PROJECT_AI_INDEX_SKILL) if relative_path.parts[:len(owner.parts)] == owner.parts)
+        skill_relative = Path(*relative_path.parts[len(owner.parts):])
+        if skill_relative in {Path("cache/README.md"), Path("cache/owners.json"), Path("cache/.gitignore")}:
+            return True
+        if skill_relative != Path("index.json") and skill_relative.suffix != ".md":
+            return False
+        if any(Path(part).stem.casefold() in {"plan", "plans", "log", "logs", "receipt", "receipts", "recovery"} for part in skill_relative.parts):
+            return False
+    elif relative_path.parts and relative_path.parts[0] in APPROVED_GLOBAL_SKILL_NAMES:
+        skill_relative = Path(*relative_path.parts[1:])
+    else:
+        return False
+    if not skill_relative.parts:
+        return True
+    return (
+        ".." not in skill_relative.parts
+        and not any(part in EXCLUDED_PARTS for part in skill_relative.parts)
+        and not skill_relative.name.endswith(EXCLUDED_SUFFIXES)
+        and not sensitive_name(skill_relative)
+    )
+
+
+def staged_source_paths(source_dir):
+    output = run_command(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACDMRTUXB"], cwd=source_dir).stdout
+    return [Path(path) for path in output.split("\0") if path]
+
+
+def assert_publishable_staged_paths(source_dir):
+    staged_paths = staged_source_paths(source_dir)
+    refused = [path for path in staged_paths if not publishable_source_path(path)]
+    if refused:
+        details = "\n".join(f"- {path.as_posix()}" for path in refused)
+        raise RuntimeError(f"Refusing to mix non-public or unrelated staged paths into the source publication:\n{details}")
+    return staged_paths
+
+
+def source_worktree_paths(source_dir):
+    output = run_command(["git", "status", "--porcelain", "-z", "--untracked-files=all"], cwd=source_dir).stdout
+    paths = []
+    records = iter(output.split("\0"))
+    for record in records:
+        if not record:
+            continue
+        paths.append(Path(record[3:]))
+        if "R" in record[:2] or "C" in record[:2]:
+            paths.append(Path(next(records)))
+    return list(dict.fromkeys(paths))
+
+
+def assert_publishable_worktree_paths(source_dir):
+    paths = source_worktree_paths(source_dir)
+    refused = [path for path in paths if not publishable_source_path(path)]
+    if refused:
+        details = "\n".join(f"- {path.as_posix()}" for path in refused)
+        raise RuntimeError(f"Refusing publication while unrelated or non-public worktree paths are dirty:\n{details}")
+    return paths
+
+
+def render_source_readmes(source_dir, skill_paths, dry_run=False):
+    template_source = next((path.parent for path in skill_paths if path.name == "management-skill"), source_dir)
+    expected = {
+        source_dir / "README.md": build_readme(skill_paths, language="en", source_dir=template_source),
+        source_dir / "README.zh.md": build_readme(skill_paths, language="zh", source_dir=template_source),
+    }
+    changed = []
+    for path, rendered in expected.items():
+        if not path.is_file() or path.read_text(encoding="utf-8") != rendered:
+            changed.append(path.name)
+            if not dry_run:
+                path.write_bytes(rendered.encode("utf-8"))
+    return changed
+
+
+def publication_upstream(source_dir):
+    branch_name = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
+    if not branch_name:
+        raise RuntimeError("Publication pending: detached source HEAD has no selected delivery branch")
+    configuration = run_command(["git", "config", "--null", "--list"], cwd=source_dir).stdout
+    values = {}
+    for record in configuration.split("\0"):
+        if record:
+            key, separator, value = record.partition("\n")
+            values.setdefault(key, []).append(value)
+    remotes = values.get(f"branch.{branch_name}.remote", [])
+    references = values.get(f"branch.{branch_name}.merge", [])
+    if len(remotes) != 1 or remotes[0] == "." or len(references) != 1 or not references[0].startswith("refs/heads/"):
+        raise RuntimeError(f"Publication pending: {branch_name} has no single configured remote upstream; configure its intended upstream before retrying. Local HEAD: {repository_head(source_dir)}")
+    push_urls = run_command(["git", "remote", "get-url", "--push", "--all", remotes[0]], cwd=source_dir).stdout.splitlines()
+    if len(push_urls) != 1:
+        raise RuntimeError(f"Publication pending: upstream remote {remotes[0]} has multiple push destinations; select one configured destination before retrying")
+    return {"branch": branch_name, "remote": remotes[0], "reference": references[0], "push_url": push_urls[0]}
+
+
+def selected_publication_paths(source_dir, include_paths):
+    paths = []
+    for value in include_paths or []:
+        path = Path(value)
+        if path.is_absolute() or not path.parts or ".." in path.parts or not publishable_source_path(path):
+            raise RuntimeError(f"Refusing non-public or unscoped publication path: {value}")
+        target = source_dir / path
+        if target.is_dir() or target.is_symlink():
+            raise RuntimeError(f"--include-path requires an exact source file, not a directory or symlink: {value}")
+        if not target.resolve().is_relative_to(source_dir):
+            raise RuntimeError(f"Publication path escapes the source owner: {value}")
+        tracked = run_command(["git", "--literal-pathspecs", "ls-files", "-z", "--", path.as_posix()], cwd=source_dir).stdout or run_command(["git", "--literal-pathspecs", "ls-tree", "-z", "HEAD", "--", path.as_posix()], cwd=source_dir).stdout
+        if not target.is_file() and not tracked:
+            raise RuntimeError(f"Publication path is neither a source file nor a tracked deletion: {value}")
+        paths.append(path)
+    return list(dict.fromkeys(paths))
+
+
+def active_git_operation(source_dir):
+    git_directory = Path(run_command(["git", "rev-parse", "--absolute-git-dir"], cwd=source_dir).stdout.strip())
+    return next((name for name in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "sequencer") if (git_directory / name).exists()), "")
+
+
+def dirty_source_signature(source_dir):
+    untracked = run_command(["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=source_dir).stdout.split("\0")
+    files = {name: hashlib.sha256((source_dir / name).read_bytes()).hexdigest() for name in untracked if name and (source_dir / name).is_file()}
+    return {"staged": run_command(["git", "diff", "--cached", "--binary", "--full-index"], cwd=source_dir).stdout, "unstaged": run_command(["git", "diff", "--binary", "--full-index"], cwd=source_dir).stdout, "untracked": files}
+
+
+@contextmanager
+def preserved_source_changes(source_dir):
+    if not source_worktree_paths(source_dir):
+        yield
+        return
+    original_head = repository_head(source_dir)
+    original_branch = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
+    original_signature = dirty_source_signature(source_dir)
+    run_command(["git", "stash", "push", "--include-untracked", "--message", f"managed-publication-{time.time_ns()}"], cwd=source_dir)
+    stash_head = run_command(["git", "rev-parse", "refs/stash"], cwd=source_dir).stdout.strip()
+    try:
+        yield
+    finally:
+        operation = active_git_operation(source_dir)
+        current_branch = run_command(["git", "branch", "--show-current"], cwd=source_dir).stdout.strip()
+        if operation or current_branch != original_branch:
+            print(f"Recovery preserved: stash {stash_head}; return to {original_branch} and finish or abort {operation or 'the branch change'}, then git stash apply --index {stash_head}. The stash was not dropped.")
+            if not operation:
+                raise RuntimeError(f"Publication recovery pending: branch changed; restore stash {stash_head} only on its original branch {original_branch}")
+        else:
+            try:
+                run_command(["git", "stash", "apply", "--index", stash_head], cwd=source_dir)
+                restored_signature = dirty_source_signature(source_dir)
+                if repository_head(source_dir) == original_head and restored_signature != original_signature:
+                    raise RuntimeError("restored worktree/index differs from its saved state")
+                conflicts = run_command(["git", "diff", "--name-only", "--diff-filter=U"], cwd=source_dir).stdout.strip()
+                if conflicts:
+                    raise RuntimeError(f"restored changes contain conflicts: {conflicts}")
+                stash_records = run_command(["git", "stash", "list", "--format=%H %gd"], cwd=source_dir).stdout.splitlines()
+                selector = next((line.split(" ", 1)[1] for line in stash_records if line.split(" ", 1)[0] == stash_head), None)
+                if selector is None:
+                    raise RuntimeError("the saved stash identity no longer has a matching stash reference")
+                run_command(["git", "stash", "drop", selector], cwd=source_dir)
+                print(f"Restored and verified temporary integration stash {stash_head}; preserved other stash entries.")
+            except (OSError, subprocess.CalledProcessError, RuntimeError) as error:
+                details = error.stderr.strip() if isinstance(error, subprocess.CalledProcessError) and error.stderr else str(error)
+                raise RuntimeError(f"Publication recovery pending: restore stash {stash_head} with its index after resolving the current worktree. The saved stash remains available. {details}") from error
+
+
+def integrate_publication_upstream(source_dir, upstream, include_commits=None):
+    if publication_upstream(source_dir) != upstream:
+        raise RuntimeError("Publication pending: the selected branch or configured upstream changed during delivery")
+    previous_head = repository_head(source_dir)
+    unpublished_before_fetch = set(run_command(["git", "rev-list", previous_head, "--not", "--remotes"], cwd=source_dir).stdout.splitlines())
+    run_command(["git", "fetch", "--no-tags", upstream["remote"], upstream["reference"]], cwd=source_dir)
+    fetched_head = run_command(["git", "rev-parse", "FETCH_HEAD"], cwd=source_dir).stdout.strip()
+    incoming_range = f"{previous_head}..{fetched_head}"
+    upstream_merges = run_command(["git", "rev-list", "--min-parents=2", incoming_range], cwd=source_dir).stdout.splitlines()
+    if upstream_merges:
+        raise RuntimeError(
+            f"Publication pending: incoming merge commits on {upstream['remote']}:{upstream['reference']}: "
+            f"{', '.join(upstream_merges)}. Reconcile the upstream history before integrating it."
+        )
+    ahead_commits = run_command(["git", "rev-list", f"{fetched_head}..{previous_head}"], cwd=source_dir).stdout.splitlines()
+    local_merges = run_command(["git", "rev-list", "--min-parents=2", f"{fetched_head}..{previous_head}"], cwd=source_dir).stdout.strip()
+    if local_merges:
+        raise RuntimeError("Publication pending: local merge commits require semantic reconciliation; no merge commit may be published")
+    if include_commits is not None:
+        if any(not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit) for commit in include_commits):
+            raise RuntimeError("--include-commit requires an exact full lowercase commit hash")
+        unselected_commits = [commit for commit in ahead_commits if commit not in include_commits]
+        if unselected_commits:
+            raise RuntimeError(f"Publication pending: preexisting local commits need explicit --include-commit selection before delivery: {', '.join(unselected_commits)}")
+    if not run_command(["git", "rev-list", "-1", incoming_range], cwd=source_dir).stdout.strip():
+        return False
+    if ahead_commits and any(commit not in unpublished_before_fetch for commit in ahead_commits):
+        raise RuntimeError("Publication pending: divergent commits were already published; preserve history instead of rebasing them")
+    command = ["git", "-c", "core.editor=true", "rebase", "--no-rebase-merges", "--no-autostash", fetched_head] if ahead_commits else ["git", "merge", "--no-autostash", "--ff-only", fetched_head]
+    with preserved_source_changes(source_dir):
+        try:
+            run_command(command, cwd=source_dir)
+        except subprocess.CalledProcessError as error:
+            details = error.stderr.strip() or error.stdout.strip()
+            raise RuntimeError(f"Upstream integration pending on {upstream['branch']} from {upstream['remote']}:{upstream['reference']}; resolve the rebase or fast-forward failure and retry. Local HEAD: {repository_head(source_dir)}. {details}") from error
+    return repository_head(source_dir) != previous_head
+
+
+def remote_branch_head(source_dir, upstream):
+    output = run_command(["git", "ls-remote", upstream["push_url"], upstream["reference"]], cwd=source_dir).stdout.strip()
+    return output.split()[0] if output else ""
+
+
+@contextmanager
+def validated_publication_candidate(source_dir, selected_paths, prepare_readmes=True):
+    original_head = repository_head(source_dir)
+    selected_bytes = {path: (source_dir / path).read_bytes() if (source_dir / path).is_file() else None for path in selected_paths}
+    selected_modes = {path: stat.S_IMODE((source_dir / path).stat().st_mode) for path in selected_paths if (source_dir / path).is_file()}
+    filemode = run_command(["git", "config", "--default", "true", "--type=bool", "--get", "core.filemode"], cwd=source_dir).stdout.strip()
+    staged_mode_output = run_command(["git", "--literal-pathspecs", "ls-files", "--stage", "-z", "--", *[path.as_posix() for path in selected_paths]], cwd=source_dir).stdout if selected_paths else ""
+    staged_modes = {Path(record.split("\t", 1)[1]): record.split(" ", 1)[0] for record in staged_mode_output.split("\0") if record}
+    with temporary_workspace("p-") as sandbox:
+        candidate = sandbox / "s"
+        run_command(["git", "clone", "--no-hardlinks", "--no-checkout", str(source_dir), str(candidate)])
+        run_command(["git", "config", "core.filemode", filemode], cwd=candidate)
+        for key, default in (("core.autocrlf", "false"), ("core.eol", "native"), ("core.safecrlf", "false")):
+            value = run_command(["git", "config", "--default", default, "--get", key], cwd=source_dir).stdout.strip()
+            run_command(["git", "config", key, value], cwd=candidate)
+        run_command(["git", "checkout", "--detach", original_head], cwd=candidate)
+        for path, content in selected_bytes.items():
+            target = candidate / path
+            if content is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_dir / path, target)
+        skill_paths = skill_directories(candidate)
+        project_skills = [candidate / path for path in (PROJECT_TESTING_SKILL, PROJECT_AI_INDEX_SKILL)]
+        assert_public_safe([*skill_paths, *[path for path in project_skills if path.exists() or path.is_symlink()]])
+        readme_changes = render_source_readmes(candidate, skill_paths, dry_run=True) if prepare_readmes else []
+        unselected_readmes = [name for name in readme_changes if Path(name) not in selected_paths]
+        if unselected_readmes:
+            raise RuntimeError(f"Generated README changes require explicit --include-path selection: {', '.join(unselected_readmes)}")
+        if readme_changes:
+            render_source_readmes(candidate, skill_paths)
+        run_command(["git", "add", "--all"], cwd=candidate)
+        if filemode == "false":
+            for path in selected_modes:
+                executable = staged_modes.get(path, "100644") == "100755"
+                run_command(["git", "--literal-pathspecs", "update-index", "--chmod=+x" if executable else "--chmod=-x", "--", path.as_posix()], cwd=candidate)
+        # Preserve the ordinary whitespace checks while accepting native CRLF in copied fixture files.
+        whitespace = ["-c", "core.whitespace=trailing-space,space-before-tab,cr-at-eol"] if sys.platform == "win32" else []
+        run_command(["git", *whitespace, "diff", "--cached", "--check"], cwd=candidate)
+        candidate_tree = run_command(["git", "write-tree"], cwd=candidate).stdout.strip()
+        isolated_skills = sandbox / "installed-skills"
+        deploy(candidate, isolated_skills)
+        run_release_gate(candidate, isolated_skills, "release")
+        current_bytes = {path: (source_dir / path).read_bytes() if (source_dir / path).is_file() else None for path in selected_paths}
+        current_modes = {path: stat.S_IMODE((source_dir / path).stat().st_mode) for path in selected_paths if (source_dir / path).is_file()}
+        current_staged_modes = run_command(["git", "--literal-pathspecs", "ls-files", "--stage", "-z", "--", *[path.as_posix() for path in selected_paths]], cwd=source_dir).stdout if selected_paths else ""
+        if repository_head(source_dir) != original_head or current_bytes != selected_bytes or current_modes != selected_modes or current_staged_modes != staged_mode_output:
+            raise RuntimeError("Publication pending: selected source changed while its isolated candidate was validated; retry the current source")
+        yield candidate, readme_changes, candidate_tree
+
+
+def commit_publication_paths(source_dir, selected_paths, validated_tree, message):
+    path_arguments = [path.as_posix() for path in selected_paths]
+    staged_output = run_command(["git", "--literal-pathspecs", "ls-files", "--stage", "-z", "--", *path_arguments], cwd=source_dir).stdout
+    staged_modes = {Path(record.split("\t", 1)[1]): record.split(" ", 1)[0] for record in staged_output.split("\0") if record}
+    filemode = run_command(["git", "config", "--default", "true", "--type=bool", "--get", "core.filemode"], cwd=source_dir).stdout.strip()
+    with temporary_workspace("publication-index-") as sandbox:
+        environment = dict(os.environ, GIT_INDEX_FILE=str(sandbox / "selected.index"))
+        run_command(["git", "read-tree", "HEAD"], cwd=source_dir, env=environment)
+        run_command(["git", "--literal-pathspecs", "add", "--all", "--", *path_arguments], cwd=source_dir, env=environment)
+        if filemode == "false":
+            for path in selected_paths:
+                if (source_dir / path).is_file():
+                    executable = staged_modes.get(path, "100644") == "100755"
+                    run_command(["git", "--literal-pathspecs", "update-index", "--chmod=+x" if executable else "--chmod=-x", "--", path.as_posix()], cwd=source_dir, env=environment)
+        selected_tree = run_command(["git", "write-tree"], cwd=source_dir, env=environment).stdout.strip()
+        if selected_tree != validated_tree:
+            raise RuntimeError("Publication pending: selected bytes or file modes changed after candidate validation; no source commit was created")
+        if run_command(["git", "rev-parse", "HEAD^{tree}"], cwd=source_dir).stdout.strip() != validated_tree:
+            run_command(["git", "commit", "-m", message], cwd=source_dir, env=environment)
+            print(f"Committed selected maintained source: {repository_head(source_dir)}")
+        run_command(["git", "--literal-pathspecs", "reset", "--quiet", "HEAD", "--", *path_arguments], cwd=source_dir)
+
+
+def push(repository, source_dir, message, dry_run, skills_dir=None, include_paths=None, include_commits=None):
+    source_dir = source_repository_root(source_dir)
+    upstream = publication_upstream(source_dir)
+    operation = active_git_operation(source_dir)
+    if operation:
+        raise RuntimeError(f"Publication pending: finish or abort the existing {operation} before retrying; local HEAD {repository_head(source_dir)}")
+    selected_paths = selected_publication_paths(source_dir, include_paths)
+    skill_paths = skill_directories(source_dir)
+    if dry_run:
+        status_text = run_command(["git", "status", "--short", "--branch"], cwd=source_dir).stdout.strip()
+        local_head = repository_head(source_dir)
+        remote_head = remote_branch_head(source_dir, upstream)
+        readme_changes = render_source_readmes(source_dir, skill_paths, dry_run=True)
+        print_lines("Repository source skills selected for publication:", [path.name for path in skill_paths])
+        if readme_changes:
+            print_lines("Generated README changes required:", readme_changes)
+        print(status_text or "Source worktree is clean.")
+        print(f"Source HEAD: {local_head}")
+        print(f"Configured upstream {upstream['remote']}:{upstream['reference']}: {remote_head or 'missing'}")
+        return
+    integrate_publication_upstream(source_dir, upstream, include_commits=include_commits or [])
+    with validated_publication_candidate(source_dir, selected_paths) as (candidate, readme_changes, validated_tree):
+        if publication_upstream(source_dir) != upstream:
+            raise RuntimeError("Publication pending: selected branch or upstream changed while its candidate was validated")
+        for name in readme_changes:
+            shutil.copy2(candidate / name, source_dir / name)
+        if readme_changes:
+            print_lines("Rendered selected source README files:", readme_changes)
+        if selected_paths:
+            commit_publication_paths(source_dir, selected_paths, validated_tree, message)
+        if run_command(["git", "rev-parse", "HEAD^{tree}"], cwd=source_dir).stdout.strip() != validated_tree:
+            raise RuntimeError(f"Publication pending: committed tree differs from the validated selected candidate; inspect local commit {repository_head(source_dir)} before retrying")
+    last_rejected_remote = ""
+    with preserved_source_changes(source_dir):
+        while True:
+            integrate_publication_upstream(source_dir, upstream)
+            integrated_remote_head = run_command(["git", "rev-parse", "FETCH_HEAD"], cwd=source_dir).stdout.strip()
+            if run_command(["git", "rev-parse", "HEAD^{tree}"], cwd=source_dir).stdout.strip() != validated_tree:
+                with validated_publication_candidate(source_dir, [], prepare_readmes=False) as (candidate, readme_changes, validated_tree):
+                    if readme_changes:
+                        raise RuntimeError("Unexpected README generation while validating committed upstream integration")
+            local_head = repository_head(source_dir)
+            if run_command(["git", "rev-parse", f"{local_head}^{{tree}}"], cwd=source_dir).stdout.strip() != validated_tree:
+                raise RuntimeError(f"Publication pending: local commit {local_head} differs from the validated tree; retry the current source through validation")
+            if source_worktree_paths(source_dir):
+                raise RuntimeError(f"Publication pending: source changed during release validation; local commit {local_head} remains unpushed")
+            if publication_upstream(source_dir) != upstream or repository_head(source_dir) != local_head:
+                raise RuntimeError("Publication pending: branch, upstream or HEAD changed after validation; retry the new source through validation")
+            try:
+                run_command(["git", "push", upstream["remote"], f"{local_head}:{upstream['reference']}"], cwd=source_dir)
+            except subprocess.CalledProcessError as error:
+                observed_after_rejection = remote_branch_head(source_dir, upstream)
+                if observed_after_rejection and observed_after_rejection not in (integrated_remote_head, last_rejected_remote):
+                    last_rejected_remote = observed_after_rejection
+                    print("Configured upstream advanced during push; fetching, rebasing unpublished commits and validating the integrated source before retrying.")
+                    continue
+                details = error.stderr.strip() or error.stdout.strip()
+                raise RuntimeError(f"Remote delivery pending for local commit {local_head} to {upstream['remote']}:{upstream['reference']}; repair the reported Git access or server failure and retry: {details}") from error
+            if publication_upstream(source_dir) != upstream or repository_head(source_dir) != local_head:
+                raise RuntimeError(f"Remote received only validated commit {local_head}; local branch, upstream or HEAD changed during delivery and needs a new validation")
+            observed_remote_head = remote_branch_head(source_dir, upstream)
+            if observed_remote_head == local_head:
+                published_hash = snapshot_hash(skill_paths)
+                break
+            if observed_remote_head and observed_remote_head != last_rejected_remote:
+                last_rejected_remote = observed_remote_head
+                print("Configured upstream advanced before final readback; integrating the observed remote work before retrying.")
+                continue
+            raise RuntimeError(f"Remote verification pending for local commit {local_head}: configured upstream ref is missing or unchanged after another integration attempt")
+    remaining = source_worktree_paths(source_dir)
+    unpublished = [path for path in remaining if path in selected_paths]
+    if unpublished:
+        details = "\n".join(f"- {path.as_posix()}" for path in unpublished)
+        raise RuntimeError(f"Publication reached the remote but selected source changes remain:\n{details}")
+    write_sync_state(sync_state_file(), repository, local_head, snapshot_hash(skill_paths), published_hash)
+    if remaining:
+        print_lines("Preserved unselected local changes and index entries:", [path.as_posix() for path in remaining])
+    print(f"Pushed maintained source {local_head} from {upstream['branch']} to configured upstream {upstream['remote']}:{upstream['reference']} and verified the remote hash. Repository label: {repository}.")
+
+
+def sync(repository, skills_dir, message):
+    print("Legacy sync now performs an install-only remote replacement; GitHub publication remains an explicit push action.")
+    return pull(repository, skills_dir)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Sync user global Codex skills with GitHub without putting .git in ~/.agents/skills.")
+    parser.add_argument("--repo", default=DEFAULT_REPOSITORY)
+    parser.add_argument("--skills-dir", type=Path, default=OFFICIAL_USER_SKILLS_DIRECTORY)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    sync_parser = subparsers.add_parser("sync")
+    sync_parser.add_argument("--message", default="Sync global Codex skills")
+    subparsers.add_parser("preuse")
+    pull_parser = subparsers.add_parser("pull")
+    pull_parser.add_argument("--repo", dest="pull_repository", default=argparse.SUPPRESS)
+    pull_parser.add_argument("--skills-dir", type=Path, dest="pull_skills_dir", default=argparse.SUPPRESS)
+    status_parser = subparsers.add_parser("status")
+    status_parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
+    status_parser.add_argument("--skills-dir", type=Path, dest="status_skills_dir", default=argparse.SUPPRESS)
+    deploy_parser = subparsers.add_parser("deploy")
+    deploy_parser.add_argument("--source-dir", type=Path, required=True)
+    deploy_parser.add_argument("--skills-dir", type=Path, dest="deploy_skills_dir", default=argparse.SUPPRESS)
+    install_agents_parser = subparsers.add_parser("install-global-agents")
+    install_agents_parser.add_argument("--source-dir", type=Path, required=True)
+    partial_agents_mode = install_agents_parser.add_mutually_exclusive_group()
+    partial_agents_mode.add_argument("--startup-only", action="store_true", help="Recoverably update only the AI-index startup block while preserving other global guidance")
+    partial_agents_mode.add_argument("--closeout-only", action="store_true", help="Recoverably replace only managed closeout guidance or the recognized legacy Ending paragraph")
+    install_agents_parser.add_argument("--skills-dir", type=Path, dest="install_agents_skills_dir", default=argparse.SUPPRESS)
+    restore_agents_parser = subparsers.add_parser("restore-global-agents")
+    restore_agents_parser.add_argument("--backup-id", required=True)
+    restore_agents_parser.add_argument("--skills-dir", type=Path, dest="restore_agents_skills_dir", default=argparse.SUPPRESS)
+    list_agents_parser = subparsers.add_parser("list-global-agents-backups")
+    list_agents_parser.add_argument("--skills-dir", type=Path, dest="list_agents_skills_dir", default=argparse.SUPPRESS)
+    render_parser = subparsers.add_parser("render-readme")
+    render_parser.add_argument("--output", type=Path, required=True)
+    push_parser = subparsers.add_parser("push")
+    push_parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
+    push_parser.add_argument("--message", default="Update global Codex skills")
+    push_parser.add_argument("--include-path", action="append", default=[], help="Exact task-owned source file to commit; repeat for each file, including generated README changes. Existing commits may be pushed without selecting files.")
+    push_parser.add_argument("--include-commit", action="append", default=[], help="Exact full hash of a preexisting task-owned local commit authorized for delivery; repeat for each unpushed commit.")
+    args = parser.parse_args()
+    if args.command == "sync":
+        sync(args.repo, args.skills_dir, args.message)
+        announce_memory_vault(args.skills_dir)
+    elif args.command == "preuse":
+        preuse(args.repo, args.skills_dir)
+    elif args.command == "pull":
+        pull(getattr(args, "pull_repository", args.repo), getattr(args, "pull_skills_dir", args.skills_dir))
+        announce_memory_vault(getattr(args, "pull_skills_dir", args.skills_dir))
+    elif args.command == "status":
+        status_skills_dir = getattr(args, "status_skills_dir", args.skills_dir)
+        source_dir = args.source_dir.expanduser().resolve()
+        deployment_differences = [
+            name for name in PRIMARY_SKILL_ORDER
+            if path_differs(source_dir / name, status_skills_dir.expanduser().resolve() / name)
+        ]
+        if deployment_differences:
+            print_lines("Repository source differs from deployed global skills:", deployment_differences)
+        else:
+            print("Repository source skills match the deployed global skills.")
+        print("User global AGENTS.md files are intentionally outside ordinary deployment parity.")
+        push(args.repo, source_dir, "Update global Codex skills", True, status_skills_dir)
+        if deployment_differences:
+            raise SystemExit(1)
+    elif args.command == "deploy":
+        deploy(args.source_dir, getattr(args, "deploy_skills_dir", args.skills_dir))
+        announce_memory_vault(getattr(args, "deploy_skills_dir", args.skills_dir))
+    elif args.command == "install-global-agents":
+        partial_mode = {"closeout_only": True} if args.closeout_only else {"startup_only": args.startup_only}
+        installation = install_global_agents(args.source_dir, getattr(args, "install_agents_skills_dir", args.skills_dir), **partial_mode)
+        if installation["changed"]:
+            print(f"Installed the global AGENTS template at {installation['target']} with persistent backup {installation['backup_id']}.")
+        else:
+            print(f"Global AGENTS template already matches at {installation['target']}; no backup was created.")
+    elif args.command == "restore-global-agents":
+        restoration = restore_global_agents_backup(getattr(args, "restore_agents_skills_dir", args.skills_dir), args.backup_id)
+        if restoration["changed"]:
+            print(f"Restored global AGENTS from persistent backup {restoration['backup_id']} at {restoration['target']}.")
+        else:
+            print(f"Global AGENTS backup {restoration['backup_id']} was already restored.")
+    elif args.command == "list-global-agents-backups":
+        backups = list_global_agents_backups(getattr(args, "list_agents_skills_dir", args.skills_dir))
+        print_lines("Persistent global AGENTS backups:", [f"{backup['id']} ({backup['state']})" for backup in backups] or ["none"])
+    elif args.command == "render-readme":
+        skill_paths = skill_directories(args.skills_dir)
+        assert_approved_global_skill_set(skill_paths)
+        assert_public_safe(skill_paths)
+        args.output.expanduser().resolve().write_text(build_readme(skill_paths, language=readme_language_for_output(args.output)), encoding="utf-8")
+        print(f"Rendered public README: {args.output.expanduser().resolve()}")
+    elif args.command == "push":
+        push(args.repo, args.source_dir, args.message, False, args.skills_dir, args.include_path, args.include_commit)
+
+
+if __name__ == "__main__":
+    main()

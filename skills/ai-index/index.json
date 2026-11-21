@@ -482,7 +482,7 @@
           "file": ".github/actions/publish-plugin/publish.py",
           "symbol": "publish",
           "anchor": "def publish(project, package):",
-          "summary": "Publish a standalone package snapshot for current master, replace the release tag with a lease and verify the remote ref."
+          "summary": "Publish the native Marketplace on master, tag the same commit and archive only the distributable Skill files."
         }
       ]
     },

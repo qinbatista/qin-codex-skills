@@ -1,4 +1,4 @@
-"""Publish a Git marketplace containing the selected plugin's Skill files."""
+"""Publish the native Skill marketplace on the source repository's primary history."""
 
 import argparse
 import json
@@ -50,7 +50,8 @@ def write_tree(project, files):
         if separator:
             directories[name][remainder] = mode, oid
         else:
-            records.append(f"{mode} blob {oid}\t{name}\0")
+            kind = "commit" if mode == "160000" else "blob"
+            records.append(f"{mode} {kind} {oid}\t{name}\0")
     for name, children in sorted(directories.items()):
         oid = write_tree(project, children)
         records.append(f"040000 tree {oid}\t{name}\0")
@@ -103,6 +104,29 @@ def remote_ref(project, ref):
     return line.split("\t", 1)[0] if line else None
 
 
+def primary_tree(project, package):
+    prefix = f"plugins/{package['name']}/skills/"
+    source = source_entries(project, package["sourceCommit"])
+    files = {path: entry for path, entry in source.items() if not path.startswith(prefix)}
+    files.update(source_entries(project, package["tree"]))
+    return write_tree(project, files)
+
+
+def prepare(project, name):
+    """Stage the native layout alongside the currently staged Skill sources."""
+    paths = [MARKETPLACE, f"plugins/{name}/skills"]
+    if git(project, "diff", "--name-only", "--", *paths) or git(
+        project, "ls-files", "--others", "--exclude-standard", "--", *paths
+    ):
+        raise ValueError("The generated marketplace paths contain local edits. Review them before preparing the package.")
+    index_tree = git_text(project, "write-tree")
+    package = build_package(project, index_tree, name)
+    tree = primary_tree(project, package)
+    if tree != index_tree:
+        git(project, "restore", f"--source={tree}", "--staged", "--worktree", "--", *paths)
+    return {"status": "prepared", "skills": package["skills"], "tree": tree}
+
+
 def publish(project, package):
     source = package["sourceCommit"]
     if remote_ref(project, SOURCE_REF) != source:
@@ -110,22 +134,21 @@ def publish(project, package):
         return {"status": "superseded"}
 
     previous = remote_ref(project, PACKAGE_REF)
-    if previous:
-        git(project, "fetch", "--no-tags", "origin", PACKAGE_REF)
-        if git_text(project, "rev-parse", "FETCH_HEAD") != previous:
-            raise RuntimeError("The plugin tag changed during fetch. Retry against the current tag.")
-        if git_text(project, "rev-parse", f"{previous}^{{tree}}") == package["tree"]:
-            return {"status": "current", "commit": previous}
-
-    commit = git_text(
-        project, "commit-tree", package["tree"],
-        "-m", f"Publish {package['name']}", "-m", f"Source commit {source}",
-    )
-    if remote_ref(project, SOURCE_REF) != source:
+    tree = primary_tree(project, package)
+    commit = source
+    if tree != git_text(project, "rev-parse", f"{source}^{{tree}}"):
+        # Direct source pushes may omit the generated layout. Keep their full tree and history.
+        commit = git_text(project, "commit-tree", tree, "-p", source, "-m", f"Refresh {package['name']} marketplace files")
+    if previous == commit and source == commit:
+        return {"status": "current", "commit": commit}
+    git(project, "push", "--atomic", f"--force-with-lease={SOURCE_REF}:{source}",
+        f"--force-with-lease={PACKAGE_REF}:{previous or ''}", "origin",
+        f"{commit}:{SOURCE_REF}", f"{commit}:{PACKAGE_REF}")
+    current_primary = remote_ref(project, SOURCE_REF)
+    if current_primary != commit:
         return {"status": "superseded"}
-    git(project, "push", f"--force-with-lease={PACKAGE_REF}:{previous or ''}", "origin", f"{commit}:{PACKAGE_REF}")
     if remote_ref(project, PACKAGE_REF) != commit:
-        raise RuntimeError("The freshly read plugin tag does not match the published commit.")
+        raise RuntimeError("The package tag and the published master do not identify the same commit.")
     return {"status": "published", "commit": commit}
 
 
@@ -133,14 +156,23 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--plugin", choices=PACKS, required=True)
-    parser.add_argument("--publish", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--publish", action="store_true")
+    mode.add_argument("--prepare", action="store_true", help="Stage the distribution layout from the Git index in the source commit")
+    parser.add_argument("--archive", type=Path, help="Write a skills-only release ZIP for the grouped installer")
     args = parser.parse_args()
     project = args.project_root.resolve()
     try:
+        if args.prepare:
+            print(json.dumps(prepare(project, args.plugin), indent=2))
+            return
         source = git_text(project, "rev-parse", "HEAD^{commit}")
         package = build_package(project, source, args.plugin)
         if args.publish:
             package.update(publish(project, package))
+        if args.archive and package.get("status") != "superseded":
+            git(project, "archive", "--format=zip", f"--prefix={args.plugin}/",
+                f"--output={args.archive.resolve()}", package["tree"])
         print(json.dumps(package, indent=2))
     except subprocess.CalledProcessError as error:
         parser.exit(1, error.stderr.decode("utf-8", "replace"))

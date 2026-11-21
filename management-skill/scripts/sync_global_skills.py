@@ -17,6 +17,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow-skill" / "scripts"))
 from task_artifact_paths import resolve_task_artifact_root, task_artifact_scope, validate_task_directory, verify_cache_git
 
@@ -1604,10 +1605,18 @@ def publishable_source_path(relative_path):
         ".gitignore", "AGENTS.md", "README.md", "README.zh.md", ".github/workflows/ci.yml",
         ".github/workflows/publish-plugin.yml", ".github/actions/publish-plugin/action.yml",
         ".github/actions/publish-plugin/publish.py", "plugins/qin-codex-skills/plugin.json",
-        "plugins/qin-codex-skills/skills.json",
+        "plugins/qin-codex-skills/skills.json", ".agents/plugins/marketplace.json",
     }:
         return True
-    if relative_path.parts[:3] == PROJECT_TESTING_SKILL.parts:
+    if relative_path.parts[:3] == ("plugins", "qin-codex-skills", "skills"):
+        from install_skill_pack import skill_file
+
+        if len(relative_path.parts) < 5 or relative_path.parts[3] not in APPROVED_GLOBAL_SKILL_NAMES:
+            return False
+        skill_relative = Path(*relative_path.parts[4:])
+        if not skill_file(skill_relative):
+            return False
+    elif relative_path.parts[:3] == PROJECT_TESTING_SKILL.parts:
         skill_relative = Path(*relative_path.parts[3:])
     elif any(relative_path.parts[:len(owner.parts)] == owner.parts for owner in (PROJECT_AI_INDEX_SKILL, LEGACY_PROJECT_AI_INDEX_SKILL)):
         owner = next(owner for owner in (PROJECT_AI_INDEX_SKILL, LEGACY_PROJECT_AI_INDEX_SKILL) if relative_path.parts[:len(owner.parts)] == owner.parts)

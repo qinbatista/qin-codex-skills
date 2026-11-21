@@ -26,6 +26,7 @@ CATALOG_RELATIVE_PATH = Path("management-skill/assets/global-skill-capability-ca
 PROJECT_TESTING_SKILL_RELATIVE_PATH = Path(".agents/skills/testing-skill")
 PROJECT_AI_INDEX_SKILL_RELATIVE_PATH = Path("skills/ai-index")
 PLUGIN_RELEASE_INPUTS = (
+    Path(".agents/plugins/marketplace.json"),
     Path("plugins/qin-codex-skills"),
     Path(".github/actions/publish-plugin"),
     Path(".github/workflows/publish-plugin.yml"),

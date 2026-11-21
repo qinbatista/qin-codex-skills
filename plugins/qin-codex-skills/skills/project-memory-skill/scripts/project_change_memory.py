@@ -1,0 +1,987 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+import sys
+if os.name == "nt":
+    import msvcrt
+elif os.name == "posix":
+    import fcntl
+else:
+    raise RuntimeError(f"Unsupported host OS for project memory locking: {os.name}")
+import re
+import subprocess
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
+
+
+DEFAULT_STORE = Path.home() / ".codex" / "project-change-memory"
+DEFAULT_VAULT = Path.home() / "Documents" / "Obsidian" / "LLM Memory"
+SCHEMA_VERSION = 1
+SCOPE_VALUES = ("project", "feature", "code", "file")
+CHANGE_KIND_VALUES = ("add", "edit", "rename", "move", "delete", "mixed")
+VERIFICATION_STATUS_VALUES = ("passed", "partial", "failed", "not-run")
+CANONICAL_KNOWLEDGE_FOLDER = "Knowledge"
+LEGACY_KNOWLEDGE_FOLDER = "KnowledgeAreas"
+PLACEHOLDER_SEMANTIC_PATTERN = re.compile(
+    r"^(?:(?:tmp|temp|temporary|test|dummy|placeholder|todo|tbd|unknown|null|none|n/?a)"
+    r"(?:[\s._-]+(?:record|value|entry|result|reason|summary|module|change|memory))*)$",
+    re.IGNORECASE,
+)
+RECORD_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[a-f0-9]{12}$")
+PROJECT_OWNER_ALIASES = {
+    "global-codex-skills": "Global Codex Skills",
+    "qin-codex-skills": "Global Codex Skills",
+}
+SENSITIVE_PATTERNS = (
+    re.compile(r"(?<![A-Za-z0-9_-])(?:sk|rk|pk)-[A-Za-z0-9_-]{12,}"),
+    re.compile(r"(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s,;]{8,}", re.IGNORECASE),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"https?://[^\s/:]+:[^\s/@]+@", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])/(?:Users|home)/[A-Za-z0-9._-]+/", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])\\(?:Users|home)\\[A-Za-z0-9._-]+\\", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9])[A-Z]:[\\/]Users[\\/][^\s]+", re.IGNORECASE),
+    re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b"),
+)
+
+
+def _normalize_task_name(value, fallback="task"):
+    normalized = re.sub(r"\s+", " ", str(value or "")).strip().lower()
+    normalized = re.sub(r"(?:sk-[a-z0-9_-]{8,}|/users/[^ ]+|/home/[^ ]+|[a-z]:\\[^ ]+)", "private", normalized, flags=re.IGNORECASE)
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")[:96]
+    if slug:
+        return slug
+    digest = hashlib.sha256(str(value or fallback).encode("utf-8")).hexdigest()[:12]
+    return f"{fallback}-{digest}"
+
+
+def _task_group_key(project_key, task_group="", task_name=""):
+    relation_name = task_group or task_name
+    if not str(relation_name or "").strip():
+        return ""
+    normalized = _normalize_task_name(relation_name, "group")
+    return hashlib.sha256(f"{str(project_key or '').strip().lower()}|task-group|{normalized}".encode("utf-8")).hexdigest()[:24]
+
+
+def _memory_scope(project_key, module, task_name="", task_group="", session_id=""):
+    """Preserve legacy scope identities without reading the chat transcript."""
+    session_candidates = (session_id, os.environ.get("CODEX_THREAD_ID"), os.environ.get("CODEX_SESSION_ID"))
+    resolved_session_id = next((value.strip().lower() for value in session_candidates if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", value.strip(), re.IGNORECASE)), "")
+    active_task_name = task_name or os.environ.get("CODEX_TASK_NAME", "")
+    active_task_group = task_group or os.environ.get("CODEX_TASK_GROUP", "")
+    normalized_task_name = _normalize_task_name(active_task_name) if str(active_task_name or "").strip() else ""
+    normalized_task_group = _normalize_task_name(active_task_group, "group") if str(active_task_group or "").strip() else ""
+    task_payload = "|".join((str(project_key or "").strip().lower(), "project-change", str(module or "").strip().lower(), normalized_task_name))
+    task_scope = hashlib.sha256(task_payload.encode("utf-8")).hexdigest()[:24] if normalized_task_name else ""
+    group_scope = _task_group_key(project_key, normalized_task_group, normalized_task_name)
+    session_scope = hashlib.sha256(resolved_session_id.encode("utf-8")).hexdigest()[:24] if resolved_session_id else ""
+    return {"codex_session_key": session_scope, "task_name": normalized_task_name, "task_group": normalized_task_group, "task_scope_key": task_scope, "task_group_key": group_scope, "task_scope_mode": "session+task+group" if resolved_session_id and task_scope and group_scope else "session+task" if resolved_session_id and task_scope else "session+group" if resolved_session_id and group_scope else "session" if resolved_session_id else "task+group" if task_scope and group_scope else "task" if task_scope else "group" if group_scope else "unscoped"}
+
+
+def _scope_relation(record, scope):
+    """Describe related legacy memory without changing project search isolation."""
+    active_session = scope.get("codex_session_key", "")
+    active_task = scope.get("task_scope_key", "")
+    active_group = scope.get("task_group_key", "")
+    if not (active_session or active_task or active_group):
+        return "unscoped_query"
+    same_session = bool(active_session and active_session == (record.get("codex_session_key") or record.get("session_key")))
+    if active_task and active_task == record.get("task_scope_key"):
+        return "same_session_task" if same_session else "related_task_scope"
+    record_project = record.get("project") if isinstance(record.get("project"), dict) else {}
+    record_project_key = record.get("project_key") or record_project.get("key") or ""
+    record_group = record.get("task_group_key") or _task_group_key(record_project_key, record.get("task_group", ""), record.get("task_name", ""))
+    if active_group and active_group == record_group:
+        return "same_session_task_group" if same_session else "related_task_group"
+    if same_session and not (active_task or active_group):
+        return "same_session"
+    return "project_result_scope"
+
+
+def _acquire_file_lock(lock_handle):
+    if os.name == "nt":
+        lock_handle.seek(0, os.SEEK_END)
+        if lock_handle.tell() == 0:
+            lock_handle.write("\0")
+            lock_handle.flush()
+        lock_handle.seek(0)
+        msvcrt.locking(lock_handle.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+
+
+def _single_line(value, field_name, required=True, max_length=1200):
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if required and not text:
+        raise ValueError(f"{field_name} is required")
+    if any(pattern.search(text) for pattern in SENSITIVE_PATTERNS):
+        raise ValueError(f"{field_name} contains private or secret-like content")
+    return text[:max_length]
+
+
+def _semantic_line(value, field_name, max_length=1200):
+    text = _single_line(value, field_name, max_length=max_length)
+    if PLACEHOLDER_SEMANTIC_PATTERN.fullmatch(text):
+        raise ValueError(f"{field_name} contains placeholder-only semantics")
+    return text
+
+
+def _record_has_placeholder_semantics(record):
+    return any(
+        PLACEHOLDER_SEMANTIC_PATTERN.fullmatch(str(record.get(field_name, "")).strip())
+        for field_name in ("module", "summary", "reason", "result")
+    )
+
+
+def _canonical_project_owner(value):
+    normalized = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
+    return PROJECT_OWNER_ALIASES.get(normalized, str(value or "").strip())
+
+
+def _slug(value, fallback="item"):
+    normalized = re.sub(r"[^a-z0-9._-]+", "-", str(value).strip().lower()).strip("-._")
+    return normalized[:80] or f"{fallback}-{hashlib.sha256(str(value).encode()).hexdigest()[:10]}"
+
+
+def _project_identity(project_root):
+    root = Path(project_root).expanduser().resolve()
+    if not root.exists() or not root.is_dir():
+        raise ValueError("project_root must be an existing directory")
+    name = root.name or "project"
+    path_hash = hashlib.sha256(str(root).encode()).hexdigest()[:10]
+    return {
+        "name": name,
+        "root": ".",
+        "key": f"{_slug(name, 'project')}-{path_hash}",
+        "owner": _canonical_project_owner(_registered_owner(root, require_registration=True) or ""),
+    }
+
+
+def _normalize_files(project_root, file_values):
+    root = Path(project_root).expanduser().resolve()
+    normalized = []
+    for file_value in file_values:
+        candidate = Path(file_value).expanduser()
+        relative = candidate.resolve().relative_to(root) if candidate.is_absolute() else PurePosixPath(candidate.as_posix())
+        if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+            raise ValueError(f"file must be inside project_root: {file_value}")
+        relative_text = relative.as_posix()
+        if relative_text not in normalized:
+            normalized.append(relative_text)
+    if not normalized:
+        raise ValueError("at least one --file is required")
+    return normalized
+
+
+def _project_file_index_path(project_dir, relative_file):
+    parts = [_slug(part, "path") for part in PurePosixPath(relative_file).parts]
+    leaf_hash = hashlib.sha256(relative_file.encode()).hexdigest()[:10]
+    return project_dir / "files" / Path(*parts[:-1]) / f"{parts[-1]}-{leaf_hash}.jsonl"
+
+
+def _run_git(*command, cwd):
+    try:
+        result = subprocess.run(
+            command,
+            cwd=Path(cwd),
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=3,
+            **hidden_process_options(),
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return ""
+    return result.stdout.strip()
+
+
+def _canonicalize_git_remote(remote):
+    if not remote:
+        return ""
+    normalized = remote.strip()
+    if normalized.startswith("git@"):
+        normalized = normalized.replace(":", "/", 1)
+        normalized = normalized.replace("git@", "https://", 1)
+    if normalized.startswith("ssh://"):
+        normalized = normalized.replace("ssh://", "https://", 1)
+    normalized = normalized[:-4] if normalized.endswith(".git") else normalized
+    return normalized.rstrip("/")
+
+
+def _derive_working_line(project_root):
+    root = Path(project_root).expanduser().resolve()
+    branch = _run_git("git", "rev-parse", "--abbrev-ref", "HEAD", cwd=root)
+    if branch == "HEAD":
+        branch = "DETACHED_HEAD"
+    commit = _run_git("git", "rev-parse", "HEAD", cwd=root)
+    remote = _run_git("git", "remote", "get-url", "origin", cwd=root)
+    if not remote:
+        remotes = _run_git("git", "remote", "-v", cwd=root).splitlines()
+        for remote_line in remotes:
+            if "\t" in remote_line:
+                candidate, location = remote_line.split("\t", 1)
+                if not candidate:
+                    continue
+                remote = location.split()[0] if location else ""
+                break
+    version = _run_git("git", "describe", "--tags", "--exact-match", "--abbrev=0", "HEAD", cwd=root)
+    canonical_remote = _canonicalize_git_remote(remote)
+    if canonical_remote and branch and commit:
+        identity_scope = "scoped"
+    else:
+        identity_scope = "unscoped"
+    return {
+        "identity_scope": identity_scope,
+        "canonical_remote": canonical_remote,
+        "branch": branch,
+        "commit": commit,
+        "version": version,
+    }
+
+
+def _has_sufficient_working_line(line):
+    return bool(line.get("canonical_remote") and line.get("branch") and line.get("commit") and line.get("identity_scope") == "scoped")
+
+
+def _working_line_key(line):
+    if not line:
+        return ""
+    signature = {
+        "canonical_remote": line.get("canonical_remote", ""),
+        "branch": line.get("branch", ""),
+        "commit": line.get("commit", ""),
+    }
+    if line.get("version"):
+        signature["version"] = line.get("version", "")
+    return json.dumps(signature, sort_keys=True, separators=(",", ":"))
+
+
+def _working_lines_conflict(left, right):
+    if not _has_sufficient_working_line(left) or not _has_sufficient_working_line(right):
+        return False
+    if left.get("canonical_remote") != right.get("canonical_remote"):
+        return True
+    if left.get("branch") != right.get("branch"):
+        return True
+    left_version = left.get("version", "")
+    right_version = right.get("version", "")
+    if left_version and right_version and left_version != right_version:
+        return True
+    return False
+
+
+def _should_exclude_from_auto_match(record, current_line, include_ambiguous=False):
+    record_line = record.get("project", {}).get("working_line") or record.get("working_line") or {}
+    if not include_ambiguous:
+        # Exact project identity already matched; non-Git documents still have memory.
+        if _working_lines_conflict(record_line, current_line):
+            return True
+    return False
+
+
+def _read_records(index_path):
+    if not index_path.exists():
+        return []
+    return [json.loads(line) for line in index_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _append_jsonl(path, record):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def _replace_jsonl(path, records):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".temp",
+        delete=False,
+    ) as handle:
+        replacement = Path(handle.name)
+        for record in records:
+            handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+    replacement.replace(path)
+
+
+def _invalidated_record_ids(store_path):
+    return {
+        item.get("record_id", "")
+        for item in _read_records(Path(store_path) / "invalidations.jsonl")
+        if item.get("record_id")
+    }
+
+
+def _active_local_records(store_path):
+    invalidated = _invalidated_record_ids(store_path)
+    return [
+        record
+        for record in _read_records(Path(store_path) / "index.jsonl")
+        if record.get("id") not in invalidated
+    ]
+
+
+def _projection_receipts(store_path):
+    return _read_records(Path(store_path) / "projections.jsonl")
+
+
+def _latest_projection_receipt(store_path, record_id):
+    return _latest_projection_receipts(store_path).get(record_id)
+
+
+def _latest_projection_receipts(store_path):
+    latest = {}
+    for receipt in _projection_receipts(store_path):
+        latest[receipt.get("record_id", "")] = receipt
+    return latest
+
+
+def _projection_needs_reconcile(receipt):
+    if receipt is None:
+        return True
+    if receipt.get("status") in {"unavailable", "failed"}:
+        return True
+    return not receipt.get("read_back_verified", False)
+
+
+def _record_projection_receipt(store_path, record, obsidian_status):
+    previous_attempts = sum(receipt.get("record_id") == record["id"] for receipt in _projection_receipts(store_path))
+    receipt = {
+        "schema_version": 1,
+        "record_id": record["id"],
+        "attempted_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "attempt": previous_attempts + 1,
+        "status": obsidian_status.get("status", "failed"),
+        "written": bool(obsidian_status.get("written", False)),
+        "root": obsidian_status.get("root", ""),
+        "event_status": obsidian_status.get("event_status", ""),
+        "event_id": obsidian_status.get("event_id", ""),
+        "read_back_verified": bool(obsidian_status.get("read_back_verified", False)),
+        "error_class": obsidian_status.get("error_class", ""),
+    }
+    _append_jsonl(Path(store_path) / "projections.jsonl", receipt)
+    return receipt
+
+
+def _readable_directory(value, require_absolute=False, require_memory=True):
+    if not str(value or "").strip():
+        return None
+    candidate = Path(value).expanduser()
+    if require_absolute and not candidate.is_absolute():
+        return None
+    try:
+        resolved = candidate.resolve() if candidate.is_dir() and os.access(candidate, os.R_OK) else None
+        if resolved is None or not require_memory:
+            return resolved
+        return resolved if (resolved / "AI Memory" / "ai_memory.py").is_file() and (resolved / "Projects").is_dir() else None
+    except OSError:
+        return None
+
+
+def _obsidian_config_paths():
+    home = Path.home()
+    if os.name == "nt":
+        return [home / "AppData" / "Roaming" / "obsidian" / "obsidian.json"]
+    if sys.platform == "darwin":
+        return [home / "Library" / "Application Support" / "obsidian" / "obsidian.json"]
+    return [home / ".config" / "obsidian" / "obsidian.json"]
+
+
+def _configured_open_vault():
+    for config_path in _obsidian_config_paths():
+        try:
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        vaults = payload.get("vaults", {}) if isinstance(payload, dict) else {}
+        if not isinstance(vaults, dict):
+            continue
+        open_entries = [entry for entry in vaults.values() if isinstance(entry, dict) and entry.get("open") is True]
+        for entry in sorted(open_entries, key=lambda candidate: str(candidate.get("path", ""))):
+            resolved = _readable_directory(entry.get("path"), require_absolute=True)
+            if resolved is not None:
+                return resolved
+    return None
+
+
+def _resolve_vault(vault=None, project_root=None):
+    if vault is not None:
+        return _readable_directory(vault, require_memory=False)
+    configured_path = os.environ.get("CODEX_OBSIDIAN_VAULT", "").strip()
+    if configured_path:
+        return _readable_directory(configured_path)
+    return _configured_open_vault() or _readable_directory(DEFAULT_VAULT)
+
+
+def _markdown_entry(record):
+    files = "\n".join(f"  - `{file_path}`" for file_path in record["files"])
+    verifications = "; ".join(record["verification"]) or "none supplied"
+    decisions = "; ".join(record["decisions"]) or "none"
+    risks = "; ".join(record["risks"]) or "none"
+    supersedes = record["supersedes"] or "none"
+    anchor = _event_anchor(record["id"])
+    symbols = ", ".join(f"`{value}`" for value in record.get("symbols", [])) or "none"
+    return f"### {record['recorded_at']} — {record['summary']}\n\n- Record ID: `{record['id']}`\n- Module: {record['module']}\n- Methods/symbols: {symbols}\n- Task scope: {record.get('task_scope_mode', 'unscoped')} / `{record.get('task_scope_key', '')}`\n- Task group: {record.get('task_group', '')} / `{record.get('task_group_key', '')}`\n- Scope: {record['scope']}\n- Change kind: {record['change_kind']}\n- What changed: {record['summary']}\n- Why: {record['reason']}\n- Result: {record['result']}\n- Verification: {record['verification_status']} — {verifications}\n- Decisions: {decisions}\n- Remaining risks: {risks}\n- Supersedes: `{supersedes}`\n- Files:\n{files}\n\n^{anchor}\n\n"
+
+
+HISTORY_SECTIONS = (
+    "Rules and Decisions",
+    "Implementation and Changes",
+    "Errors and Failures",
+    "Retries and Repairs",
+    "Verification and Results",
+    "Documentation, Assets and Releases",
+    "Relationships",
+)
+
+
+def _event_anchor(record_id):
+    """Stable, linkable anchor for the one canonical History entry."""
+    return "change-" + _slug(record_id, "record")
+
+
+def _normalized_registered_root(project_root):
+    root = _normalize_project_root(project_root)
+    home = _normalize_project_root(Path.home())
+    if root == home:
+        return "/"
+    if root.startswith(home + "/"):
+        return root[len(home):]
+    return root
+
+
+def _normalize_project_root(value):
+    path = Path(value)
+    if str(value).startswith("~/"):
+        path = Path.home() / str(value)[2:]
+    return path.resolve().as_posix().lower().rstrip("/")
+
+
+def _sorted_registered_owner_entries(entries):
+    return tuple(sorted(entries, key=lambda item: len(item[0]), reverse=True))
+
+
+HOME_PROJECT_OWNER_ROOTS = ((".agents", "Global Codex Skills"), (".codex", "Global Codex Skills"))
+
+# Paths are deliberately relative to the user's Documents folder. Old and
+# current locations may coexist here so moving a repository does not split its
+# durable change history.
+DOCUMENT_PROJECT_OWNER_ROOTS = (
+    ("AIProject/qin-codex-skills", "Global Codex Skills"),
+    ("Muse/SVGDrawer", "SVGDrawer"),
+    ("Muse/MuseAI", "MuseAI"),
+    ("Muse/UserExamples", "MuseAI"),
+    ("FilesManagement/Destiny", "Destiny"),
+    ("PythonProject/XNews", "XNews"),
+    ("Muse/taggingapilandingpage", "TaggingAPILandingPage"),
+    ("PythonProject/Agent-ImageEdtior", "AgentImageEditor"),
+    ("DockerProject/Docker-Mokozoo", "Mokozoo"),
+)
+
+
+# Read data only from the official installed companion.
+COMPANION_OWNER_FILE = Path("qin-unity-skills/unity-code-skill/assets/project-memory-owners.json")
+# These two general project owners historically share their name with a companion checkout.
+SHARED_COMPANION_OWNERS = {"Destiny", "XNews"}
+# This historical checkout has an owner different from its folder name. If its
+# declaration disappears, deriving a new vault owner from the name splits history.
+LEGACY_RENAMED_ROOT = "YofaGames/SpriteTamer"
+
+
+class ProjectOwnerRegistryUnavailable(ValueError):
+    """An established renamed checkout requires its installed owner declaration."""
+
+
+def _companion_project_owner_paths(home):
+    home = home.resolve()
+    documents = home / "Documents"
+    catalog = home / ".agents" / "skills" / COMPANION_OWNER_FILE
+    try:
+        if catalog.resolve() != catalog or not catalog.is_file() or catalog.stat().st_size > 65536:
+            return ()
+        data = json.loads(catalog.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError, RuntimeError):
+        return ()
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        return ()
+    rows = data.get("document_roots")
+    if not isinstance(rows, list) or len(rows) > 256:
+        return ()
+    entries = []
+    built_in_owners = {owner.casefold() for path, owner in (*HOME_PROJECT_OWNER_ROOTS, *DOCUMENT_PROJECT_OWNER_ROOTS)}
+    seen = {path.casefold() for path, owner in DOCUMENT_PROJECT_OWNER_ROOTS}
+    for row in rows:
+        if not isinstance(row, list) or len(row) != 2 or not all(isinstance(value, str) for value in row):
+            return ()
+        relative, owner = row
+        parts = relative.split("/")
+        if len(parts) != 2 or "cache" in (part.casefold() for part in parts) or relative.casefold() in seen:
+            return ()
+        if not all(re.fullmatch(r"[\w-]+(?:[ .][\w-]+)*", value) and len(value) <= 160 for value in (*parts, owner)):
+            return ()
+        if _canonical_project_owner(owner).casefold() in built_in_owners and not (owner in SHARED_COMPANION_OWNERS and owner == parts[1]):
+            return ()
+        candidate = documents / relative
+        try:
+            if candidate.resolve() != candidate:
+                continue
+        except (OSError, RuntimeError):
+            continue
+        seen.add(relative.casefold())
+        entries.append((candidate, owner))
+    return tuple(entries)
+
+
+def _registered_project_owner_paths():
+    home = Path.home()
+    entries = [(home / relative, owner) for relative, owner in HOME_PROJECT_OWNER_ROOTS]
+    entries.extend((home / "Documents" / relative, owner) for relative, owner in DOCUMENT_PROJECT_OWNER_ROOTS)
+    entries.extend(_companion_project_owner_paths(home))
+    return tuple(entries)
+
+
+def _registered_project_owners():
+    return _sorted_registered_owner_entries(
+        (_normalized_registered_root(prefix), owner)
+        for prefix, owner in _registered_project_owner_paths()
+    )
+
+
+def _registered_owner_alias(record_root):
+    return _normalized_registered_root(record_root)
+
+
+def _registered_owner(record_root, *, require_registration=False):
+    if str(record_root or "").strip() in {"", "."}:
+        return None
+    root = _registered_owner_alias(record_root)
+    home_roots = {_normalized_registered_root(Path.home() / relative) for relative, owner in HOME_PROJECT_OWNER_ROOTS}
+    for registered_root, owner in _registered_project_owners():
+        # User configuration roots can host unrelated plugins, worktrees and tasks.
+        # Only the root and its Skill directory share the global Skill owner.
+        if registered_root in home_roots and root != registered_root and not (root == registered_root + "/skills" or root.startswith(registered_root + "/skills/")):
+            continue
+        if root == registered_root + "/cache" or root.startswith(registered_root + "/cache/"):
+            continue
+        if root == registered_root or root.startswith(registered_root + "/"):
+            return owner
+    if not require_registration:
+        return None
+    protected = _normalized_registered_root(Path.home() / "Documents" / LEGACY_RENAMED_ROOT)
+    relative = PurePosixPath(root)
+    if relative.is_relative_to(protected) and relative.relative_to(protected).parts[:1] != ("cache",):
+        raise ProjectOwnerRegistryUnavailable(f"Restore the installed owner registry at {COMPANION_OWNER_FILE} before using this checkout's memory.")
+    return None
+
+
+def _project_key_for_root(project_root):
+    root = Path(project_root).expanduser().resolve()
+    path_hash = hashlib.sha256(str(root).encode()).hexdigest()[:10]
+    return f"{_slug(root.name or 'project', 'project')}-{path_hash}"
+
+
+def _registered_owner_project_keys(owner):
+    if not owner:
+        return set()
+    return {
+        _project_key_for_root(root)
+        for root, registered_owner in _registered_project_owner_paths()
+        if registered_owner == owner
+    }
+
+
+def _record_matches_project(record, project):
+    """Match exact identity or a registered old/current root for one owner."""
+    project_key = project.get("key")
+    record_project = record.get("project") if isinstance(record.get("project"), dict) else {}
+    record_key = record_project.get("key") or record.get("project_key")
+    if project_key and record_key == project_key:
+        return True
+    owner = _canonical_project_owner(project.get("owner") or _registered_owner(project.get("root", "")))
+    if not owner:
+        return False
+    if _canonical_project_owner(record.get("project_owner")) == owner:
+        return True
+    if _canonical_project_owner(record_project.get("owner")) == owner:
+        return True
+    record_root = record_project.get("root")
+    if record_root and _registered_owner(record_root) == owner:
+        return True
+    return record_key in _registered_owner_project_keys(owner)
+
+
+def _active_knowledge_root(vault_path):
+    """Use legacy knowledge only when the vault has not adopted Knowledge/."""
+    canonical_root = vault_path / CANONICAL_KNOWLEDGE_FOLDER
+    legacy_root = vault_path / LEGACY_KNOWLEDGE_FOLDER
+    if canonical_root.exists() or not legacy_root.exists():
+        return canonical_root
+    return legacy_root
+
+
+def _canonical_history_target(record, vault_path, project_root=None):
+    """Return the only broad History page permitted for an Obsidian projection."""
+    resolved_project_root = Path(project_root).expanduser().resolve() if project_root is not None else Path(record["project"]["root"]).expanduser().resolve()
+    if resolved_project_root == vault_path.resolve():
+        return _active_knowledge_root(vault_path) / "Source Ingest and Wiki Maintenance.md", "Source Ingest and Wiki Maintenance"
+    owner = record.get("project", {}).get("owner") or _registered_owner(resolved_project_root)
+    if owner == "Global Codex Skills":
+        return vault_path / "Skills" / "Global Codex Skills History.md", "Global Codex Skills"
+    if owner is None:
+        return None, ""
+    return vault_path / "Projects" / owner / "History.md", owner
+
+
+def _history_section(record):
+    text = " ".join([record.get("summary", ""), record.get("reason", ""), record.get("result", ""), record.get("verification_status", ""), record.get("change_kind", "")]).lower()
+    if any(word in text for word in ("rule", "design", "architecture", "contract", "ownership", "decision", "strategy")):
+        return HISTORY_SECTIONS[0]
+    if any(word in text for word in ("retry", "repair", "rollback", "supersed", "recovery", " fix ")):
+        return HISTORY_SECTIONS[3]
+    if record.get("verification_status") in {"failed", "partial"} or any(word in text for word in ("fail", "bug", "crash", "regression", "mismatch", "blocked")):
+        return HISTORY_SECTIONS[2]
+    if any(word in text for word in ("test", "audit", "benchmark", "verify", "verification", "acceptance", "measured", "visual proof")):
+        return HISTORY_SECTIONS[4]
+    if any(word in text for word in ("publish", "readme", "docs", "repository", "release", "asset-only")):
+        return HISTORY_SECTIONS[5]
+    return HISTORY_SECTIONS[1]
+
+
+def _insert_history_entry(path, title, section, entry, record_id):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+    else:
+        text = "# " + title + " History\n\n" + "\n\n".join("## " + heading for heading in HISTORY_SECTIONS) + "\n"
+    if f"Record ID: `{record_id}`" in text:
+        return
+    marker = "## " + section
+    position = text.find(marker)
+    if position < 0:
+        text = text.rstrip() + "\n\n" + marker + "\n"
+        position = text.find(marker)
+    next_position = text.find("\n## ", position + len(marker))
+    insertion = next_position if next_position >= 0 else len(text)
+    text = text[:insertion].rstrip() + "\n\n" + entry.rstrip() + "\n\n" + text[insertion:].lstrip("\n")
+    path.write_text(text, encoding="utf-8")
+
+
+def _activity_index_target(history_target, vault_path):
+    if history_target.parent.parent.name == "Projects":
+        return history_target.parent / "Activity Index.md"
+    if history_target.parent.name == "Skills":
+        return vault_path / "Skills" / "Activity Index.md"
+    return history_target.parent / "Activity Index.md"
+
+
+def _write_activity_pointer(history_target, vault_path, record, section):
+    target = _activity_index_target(history_target, vault_path)
+    relative_history = history_target.relative_to(vault_path).with_suffix("").as_posix()
+    pointer = f"- {record['recorded_at'][:10]} · {record['change_kind']} · [[{relative_history}#^{_event_anchor(record['id'])}|{record['summary']}]] · {record['verification_status'].upper()}"
+    text = target.read_text(encoding="utf-8") if target.exists() else "# Activity Index\n\nChronological pointers to canonical History detail.\n\n"
+    if pointer not in text:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text.rstrip() + "\n" + pointer + "\n", encoding="utf-8")
+
+
+def _journal_pointer(history_target, vault_path, record):
+    relative_history = history_target.relative_to(vault_path).with_suffix("").as_posix()
+    return f"- {record['recorded_at'][:10]} · [[{relative_history}#^{_event_anchor(record['id'])}|{record['summary']}]] · {record['verification_status'].upper()}"
+
+
+def _write_journal_pointer(history_target, vault_path, record):
+    journal = vault_path / "Journal"
+    log = journal / "log.md"
+    index = journal / "index.md"
+    pointer = _journal_pointer(history_target, vault_path, record)
+    log_text = log.read_text(encoding="utf-8") if log.exists() else "# Journal Log\n\nPointer-only chronology. Canonical event bodies remain in their owning History.\n"
+    if pointer not in log_text:
+        journal.mkdir(parents=True, exist_ok=True)
+        log_text = log_text.rstrip() + "\n" + pointer + "\n"
+        log.write_text(log_text, encoding="utf-8")
+
+    pointer_lines = [line for line in log_text.splitlines() if line.startswith("- ")]
+    recent = "\n".join(pointer_lines[-20:])
+    begin = "<!-- BEGIN BOUNDED RECENT POINTERS -->"
+    end = "<!-- END BOUNDED RECENT POINTERS -->"
+    index_text = index.read_text(encoding="utf-8") if index.exists() else "# Journal\n\nChronological navigation only; canonical detail remains in History.\n\n## Recent\n\n" + begin + "\n" + end + "\n"
+    if begin not in index_text or end not in index_text:
+        index_text = index_text.rstrip() + "\n\n## Recent\n\n" + begin + "\n" + end + "\n"
+    prefix, remainder = index_text.split(begin, 1)
+    _, suffix = remainder.split(end, 1)
+    updated_index = prefix + begin + "\n" + recent + "\n" + end + suffix
+    if updated_index != index_text:
+        index.write_text(updated_index, encoding="utf-8")
+
+
+def _project_canonical_event(runtime, record):
+    """Bridge current canonical writers while preserving the local event identity."""
+    required = ("record_event", "_read_events", "_validate_event_semantics", "_fingerprint", "_semantic_event_payload", "_with_store_lock", "_write_events")
+    if any(not callable(getattr(runtime, name, None)) for name in required):
+        raise RuntimeError("Canonical memory runtime lacks the validated, locked same-ID writer capabilities")
+    if not getattr(runtime, "EVENTS_PATH", None):
+        raise RuntimeError("Canonical memory runtime must declare its event store")
+    if not RECORD_ID_PATTERN.fullmatch(str(record.get("id") or "")):
+        raise ValueError("same-ID projection requires one valid local record identity")
+    with tempfile.TemporaryDirectory(prefix="codex-project-memory-") as directory:
+        staging = Path(directory) / "events.jsonl"
+        runtime.record_event(
+            project=record["project"]["owner"], module=record["module"], event_type="general",
+            summary=record["summary"], reason=record["reason"], result=record["result"],
+            verification_status=record["verification_status"], files=record["files"],
+            verification=record["verification"], decisions=record["decisions"], risks=record["risks"],
+            recorded_at=record["recorded_at"], events_path=staging,
+            session_key=record.get("codex_session_key", ""), task_name=record.get("task_name", ""),
+            task_scope_key=record.get("task_scope_key", ""), task_group=record.get("task_group", ""),
+            task_group_key=record.get("task_group_key", ""))
+        staged = runtime._read_events(staging)
+    if len(staged) != 1:
+        raise RuntimeError("Canonical writer did not produce exactly one validated event")
+    event = staged[0]
+    event.update({"event_id": record["id"], "supersedes": record.get("supersedes", ""), "source": "codex-project-result"})
+    runtime._validate_event_semantics(event)
+    event["fingerprint"] = runtime._fingerprint(event)
+
+    def semantic(value):
+        return runtime._semantic_event_payload({**value, "project": _canonical_project_owner(value.get("project"))})
+
+    def operation(events):
+        predecessor = next((existing for existing in events if existing.get("event_id") == event["supersedes"]), None)
+        if event["supersedes"] == event["event_id"] or predecessor and _canonical_project_owner(predecessor.get("project")) != event["project"]:
+            raise ValueError("memory supersession must stay in the same project")
+        same_id = [existing for existing in events if existing.get("event_id") == event["event_id"]]
+        if same_id:
+            if len(same_id) != 1 or semantic(same_id[0]) != semantic(event):
+                raise ValueError("same-ID canonical event conflicts with the project or completed outcome")
+            return {"status": "duplicate", "event_id": event["event_id"]}
+        if any(semantic(existing) == semantic(event) for existing in events):
+            raise ValueError("canonical outcome already exists with a different event ID")
+        events.append(event)
+        events.sort(key=lambda item: item.get("last_seen") or item.get("recorded_at") or "")
+        runtime._write_events(events, runtime.EVENTS_PATH)
+        return {"status": "written", "event_id": event["event_id"]}
+
+    output = runtime._with_store_lock(runtime.EVENTS_PATH, operation)
+    classify = getattr(runtime, "_run_auto_classification", None)
+    if callable(classify) and output["status"] == "written":
+        output["auto_classification"] = classify(runtime.EVENTS_PATH)
+    return output
+
+
+def _write_root_first_memory(record, vault_path, project_root=None):
+    project_identity = record.get("project", {})
+    projection_owner = _canonical_project_owner(project_identity.get("owner"))
+    identity_root = project_root if project_root is not None else project_identity.get("root")
+    if not projection_owner and str(identity_root or "").strip() not in {"", "."}:
+        projection_owner = _canonical_history_target(record, vault_path, identity_root)[1]
+    if not projection_owner:
+        return {"status": "no-op", "written": False, "reason": "unregistered_project_root"}
+    runtime_path = vault_path / "AI Memory" / "ai_memory.py"
+    specification = importlib.util.spec_from_file_location("myaillm_ai_memory_runtime", runtime_path)
+    if specification is None or specification.loader is None:
+        raise RuntimeError(f"Cannot load root-first AI memory runtime: {runtime_path}")
+    runtime = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(runtime)
+    projection_record = dict(record)
+    projection_record["project"] = {"name": project_identity.get("name"), "owner": projection_owner}
+    if record.get("supersedes"):
+        projection_record["decisions"] = [*record["decisions"], f"Memory correction supersedes project result record {record['supersedes']}."]
+    if callable(getattr(runtime, "import_legacy", None)):
+        with tempfile.TemporaryDirectory(prefix="codex-project-memory-") as temporary_directory:
+            source = Path(temporary_directory) / "record.jsonl"
+            source.write_text(json.dumps(projection_record, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+            output = runtime.import_legacy(source)
+    else:
+        output = _project_canonical_event(runtime, projection_record)
+    runtime.render_views()
+    event_id = record["id"]
+    project = projection_owner or "Unknown"
+    events_path = Path(getattr(runtime, "EVENTS_PATH", vault_path / "AI Memory" / "events.jsonl"))
+    events = _read_records(events_path)
+    read_back_verified = bool(event_id) and any(
+        event.get("event_id") == event_id
+        and _canonical_project_owner(event.get("project")) == project
+        and any(change.get("module") == record["module"] for change in event.get("module_changes", []))
+        and all(event.get(field) == projection_record.get(field) for field in ("summary", "reason", "result", "verification_status", "files", "verification", "decisions", "risks", "supersedes"))
+        for event in events
+    )
+    return {"status": "written", "written": True, "root": "AI Memory/events.jsonl", "event_status": output.get("status"), "event_id": event_id, "read_back_verified": read_back_verified}
+
+
+def _write_obsidian(record, vault, project_root=None, vault_is_resolved=False):
+    vault_path = vault if vault_is_resolved else _resolve_vault(vault, project_root)
+    if vault_path is None:
+        return {"status": "unavailable", "written": False}
+    vault_path = Path(vault_path).expanduser().resolve()
+    if (vault_path / "AI Memory" / "ai_memory.py").is_file():
+        return _write_root_first_memory(record, vault_path, project_root)
+    entry = _markdown_entry(record)
+    target, title = _canonical_history_target(record, vault_path, project_root)
+    if target is None:
+        return {"status": "no-op", "written": False, "reason": "unregistered_project_root"}
+    section = _history_section(record)
+    _insert_history_entry(target, title, section, entry, record["id"])
+    _write_activity_pointer(target, vault_path, record, section)
+    _write_journal_pointer(target, vault_path, record)
+    if target.parent.parent.name == "Projects":
+        index = target.parent / "index.md"
+        if not index.exists():
+            index.write_text(f"# {title}\n\n- [[Projects/{title}/History]]\n- [[Projects]]\n", encoding="utf-8")
+        projects_index = vault_path / "Projects" / "index.md"
+        line = f"- [[Projects/{title}/index|{title}]]"
+        existing = projects_index.read_text(encoding="utf-8") if projects_index.exists() else "# Projects\n\n"
+        if line not in existing:
+            projects_index.write_text(existing.rstrip() + "\n" + line + "\n", encoding="utf-8")
+    read_back_verified = entry.strip() in target.read_text(encoding="utf-8")
+    return {"status": "written", "written": True, "root": target.relative_to(vault_path).as_posix(), "read_back_verified": read_back_verified}
+
+
+def _attempt_projection(record, vault, project_root, store_path, vault_is_resolved=False):
+    try:
+        obsidian_status = _write_obsidian(record, vault, project_root, vault_is_resolved=vault_is_resolved)
+    except Exception as error:
+        obsidian_status = {"status": "failed", "written": False, "read_back_verified": False, "error_class": type(error).__name__}
+    receipt = _record_projection_receipt(store_path, record, obsidian_status)
+    return obsidian_status, receipt
+
+
+def _fingerprint(record):
+    payload = {key: record[key] for key in ("project", "module", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "symbols", "supersedes")}
+    payload.update({key: record.get(key, "") for key in ("codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")})
+    if record.get("project", {}).get("working_line"):
+        payload["working_line"] = record["project"]["working_line"]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def record_change(project_root, module, scope, change_kind, summary, reason, result, verification_status, files, verification=None, decisions=None, risks=None, supersedes="", store=DEFAULT_STORE, vault=None, recorded_at=None, task_name="", session_id="", task_group="", symbols=None, inspect_working_line=True):
+    raise RuntimeError("Codex-local project-change memory is retired; record directly in the configured Obsidian AI Memory vault")
+
+
+def remove_invalid_record(project_root, record_id, reason, store=DEFAULT_STORE):
+    raise RuntimeError("Codex-local project-change memory is read-only legacy input; use the Obsidian AI Memory repair commands")
+
+
+def search_records(project_root=None, module="", files=None, query="", max_results=5, store=DEFAULT_STORE, include_ambiguous=False, task_name="", session_id="", task_group="", include_superseded=False, symbols=None, all_projects=False, inspect_working_line=True, record_id=""):
+    if project_root is None and not all_projects:
+        raise ValueError("project-root is required; all_projects is for explicit audits only")
+    project = _project_identity(project_root) if project_root else None
+    normalized_files = _normalize_files(project_root, files) if project_root and files else list(files or [])
+    normalized_symbols = [_single_line(value, "symbol", required=False, max_length=240) for value in (symbols or []) if str(value or "").strip()]
+    current_line = _derive_working_line(project_root) if project_root and inspect_working_line else {}
+    scope = _memory_scope(project["key"], module or "project-wide", task_name, task_group, session_id) if project else {"codex_session_key": "", "task_scope_key": "", "task_group_key": ""}
+    terms = [term for term in re.findall(r"[\w.+-]+", query.lower()) if len(term) >= 2][:12]
+    store_path = Path(store).expanduser().resolve()
+    records = _active_local_records(store_path)
+    latest_projections = _latest_projection_receipts(store_path)
+    superseded_by = {}
+    for candidate in records:
+        if candidate.get("supersedes"):
+            superseded_by.setdefault(candidate["supersedes"], []).append(candidate["id"])
+    matches = []
+    for record in reversed(records):
+        if record_id and record.get("id") != record_id:
+            continue
+        if project and not _record_matches_project(record, project):
+            continue
+        if project and _should_exclude_from_auto_match(record, current_line, include_ambiguous=include_ambiguous):
+            continue
+        if not include_superseded and record.get("id") in superseded_by:
+            continue
+        if module and record["module"].lower() != module.strip().lower():
+            continue
+        if normalized_files and not any(file_path in record["files"] for file_path in normalized_files):
+            continue
+        if normalized_symbols and not all(symbol in record.get("symbols", []) for symbol in normalized_symbols):
+            continue
+        searchable = " ".join([record["summary"], record["reason"], record["result"], record["module"], *record["files"], *record.get("symbols", []), *record["verification"], *record["decisions"], *record["risks"]]).lower()
+        if terms and not all(term in searchable for term in terms):
+            continue
+        relation_reason = _scope_relation(record, scope)
+        projection = latest_projections.get(record["id"])
+        matches.append({**{key: record.get(key, "") for key in ("id", "recorded_at", "project", "module", "symbols", "scope", "change_kind", "summary", "reason", "result", "verification_status", "verification", "decisions", "risks", "files", "supersedes", "codex_session_key", "task_name", "task_group", "task_scope_key", "task_group_key", "task_scope_mode")}, "effective": record["id"] not in superseded_by, "superseded_by": superseded_by.get(record["id"], []), "projection": projection or {"status": "missing", "written": False, "read_back_verified": False}, "relation_reason": relation_reason, "source_session_key": record.get("codex_session_key", "") or record.get("session_key", "")})
+        if len(matches) >= max(1, min(max_results, 25)):
+            break
+    return {"status": "ok" if matches else "no-matches", "matches": matches}
+
+
+def reconcile_projections(project_root, record_id="", store=DEFAULT_STORE, vault=None):
+    raise RuntimeError("Codex-local projection receipts are retired; migrate legacy records into Obsidian instead")
+
+
+def memory_status(store=DEFAULT_STORE, vault=None):
+    store_path = Path(store).expanduser().resolve()
+    records = _active_local_records(store_path)
+    vault_path = _resolve_vault(vault)
+    return {"status": "ready", "local": {"store": store_path.name, "records": len(records)}, "obsidian": {"status": "available" if vault_path else "unavailable", "vault": vault_path.name if vault_path else ""}}
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Record and recall file-level project change rationale")
+    parser.add_argument("--store", type=Path, default=DEFAULT_STORE)
+    parser.add_argument("--vault", type=Path)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    search_parser = subparsers.add_parser("search")
+    search_parser.add_argument("--project-root", type=Path)
+    search_parser.add_argument("--all-projects", action="store_true", help="Explicit cross-project audit only")
+    search_parser.add_argument("--module", default="")
+    search_parser.add_argument("--file", action="append", default=[])
+    search_parser.add_argument("--symbol", action="append", default=[])
+    search_parser.add_argument("--query", default="")
+    search_parser.add_argument("--max-results", type=int, default=5)
+    search_parser.add_argument("--include-ambiguous", action="store_true")
+    search_parser.add_argument("--include-superseded", action="store_true")
+    search_parser.add_argument("--task-name", default=os.environ.get("CODEX_TASK_NAME", ""))
+    search_parser.add_argument("--task-group", default=os.environ.get("CODEX_TASK_GROUP", ""))
+    search_parser.add_argument("--session-id", default="")
+    record_parser = subparsers.add_parser("record")
+    record_parser.add_argument("--project-root", type=Path, required=True)
+    record_parser.add_argument("--module", required=True)
+    record_parser.add_argument("--scope", choices=SCOPE_VALUES, required=True)
+    record_parser.add_argument("--change-kind", choices=CHANGE_KIND_VALUES, required=True)
+    record_parser.add_argument("--summary", required=True)
+    record_parser.add_argument("--reason", required=True)
+    record_parser.add_argument("--result", required=True)
+    record_parser.add_argument("--verification-status", choices=VERIFICATION_STATUS_VALUES, required=True)
+    record_parser.add_argument("--verification", action="append", default=[])
+    record_parser.add_argument("--decision", action="append", default=[])
+    record_parser.add_argument("--risk", action="append", default=[])
+    record_parser.add_argument("--file", action="append", required=True)
+    record_parser.add_argument("--symbol", action="append", default=[])
+    record_parser.add_argument("--supersedes", default="")
+    record_parser.add_argument("--task-name", default=os.environ.get("CODEX_TASK_NAME", ""))
+    record_parser.add_argument("--task-group", default=os.environ.get("CODEX_TASK_GROUP", ""))
+    record_parser.add_argument("--session-id", default="")
+    reconcile_parser = subparsers.add_parser("reconcile")
+    reconcile_parser.add_argument("--project-root", type=Path, required=True)
+    reconcile_parser.add_argument("--record-id", default="")
+    remove_invalid_parser = subparsers.add_parser("remove-invalid")
+    remove_invalid_parser.add_argument("--project-root", type=Path, required=True)
+    remove_invalid_parser.add_argument("--record-id", required=True)
+    remove_invalid_parser.add_argument("--reason", required=True)
+    subparsers.add_parser("status")
+    args = parser.parse_args()
+    if args.command == "search":
+        output = search_records(args.project_root, args.module, args.file, args.query, args.max_results, args.store, args.include_ambiguous, args.task_name, args.session_id, args.task_group, args.include_superseded, args.symbol, args.all_projects)
+    elif args.command == "record":
+        output = record_change(args.project_root, args.module, args.scope, args.change_kind, args.summary, args.reason, args.result, args.verification_status, args.file, args.verification, args.decision, args.risk, args.supersedes, args.store, args.vault, None, args.task_name, args.session_id, args.task_group, symbols=args.symbol)
+    elif args.command == "reconcile":
+        output = reconcile_projections(args.project_root, args.record_id, args.store, args.vault)
+    elif args.command == "remove-invalid":
+        output = remove_invalid_record(args.project_root, args.record_id, args.reason, args.store)
+    else:
+        output = memory_status(args.store, args.vault)
+    print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
+
+
+if __name__ == "__main__":
+    main()

@@ -2,7 +2,7 @@
 
 Start at the [project testing Skill](../../../.agents/skills/testing-skill/SKILL.md), [test registry](../../../.agents/skills/testing-skill/references/test-registry.json) and [audit_registry.py](../../../.agents/skills/testing-skill/scripts/audit_registry.py). They own stable test purpose, goal, level, relative path, runner and Skill ownership; results remain in the current project Cache run.
 
-The project testing Skill owns the opt-in [Codex Python writing cases](../../../.agents/skills/testing-skill/references/codex-python-writing.md) and [replay command](../../../.agents/skills/testing-skill/scripts/replay_python_writing.py). Each case checks an independent answer against actual files or database state.
+The project testing Skill owns the opt-in [Codex Python writing cases](../../../.agents/skills/testing-skill/references/codex-python-writing.md) and [replay command](../../../.agents/skills/testing-skill/scripts/replay_python_writing.py). Its [Git closeout case](../../../.agents/skills/testing-skill/references/git-closeout.md) checks delivery, branch cleanup and repository ownership against local bare remotes.
 
 The [resource ledger tests](../../../workflow-skill/tests/test_task_resource_ledger.py) replace an ownership marker with a distinct file carrying the original bytes and timestamp.
 

@@ -45,4 +45,4 @@ Project memories stay isolated in the configured Obsidian vault. At completion, 
 
 ## Maintain the source
 
-GitHub Actions publishes the current package from `master` to the `codex/plugin` Git tag. The [source publisher](management-skill/SKILL.md#publish) takes exact `--include-path` or `--include-commit` selections and delivers through the configured upstream. Keep disposable files in an ignored `Cache/temp-<task>/` work directory. [Cache policy](workflow-skill/references/project-cache-artifact-policy.md)
+GitHub Actions tags the published `master` commit as `codex/plugin` and attaches the skills-only ZIP to that release. The [source publisher](management-skill/SKILL.md#publish) takes exact `--include-path` or `--include-commit` selections and delivers through the configured upstream. Keep disposable files in an ignored `Cache/temp-<task>/` work directory. [Cache policy](workflow-skill/references/project-cache-artifact-policy.md)

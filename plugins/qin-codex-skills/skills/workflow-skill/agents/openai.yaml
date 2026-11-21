@@ -1,0 +1,4 @@
+interface:
+  display_name: "workflow-skill"
+  short_description: "Parallel work, scoped monitoring, and resource cleanup"
+  default_prompt: "Use $workflow-skill to coordinate scoped branches and Monitor Mode, verify and deliver the requested result, repair recoverable failures, clean owned resources, and summarize exact Skills actually used with steps and reasons in one final response."
