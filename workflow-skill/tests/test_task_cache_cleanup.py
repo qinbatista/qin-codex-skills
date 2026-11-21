@@ -361,20 +361,23 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertEqual(legacy["results"][0]["action"], "pending")
         self.assertTrue(run.exists())
 
-    def test_72_hour_expiry_reclaims_stopped_retained_recovery_and_own_runs(self):
+    def test_48_hour_expiry_reclaims_stopped_retained_recovery_and_own_runs(self):
         runs = [self.run_root(task) for task in ("review", "retry", "mine")]
         for task, run, state in zip(("review", "retry", "mine"), runs, ("retained", "recovery", "working")):
             (run / "payload").write_bytes(b"unused task support")
-            self.retain_run(self.project, task, run, state=state, reason="Temporary review/retry of this task")
+            record = self.retain_run(self.project, task, run, state=state, reason="Temporary review/retry of this task")
+            if state in {"retained", "recovery"}:
+                record["retention_review_at"] = record["heartbeat"] + 72 * 3600
+                cleanup._write(self.record_path(run), record)
         held = self.run_root("held-review")
         review = held / "proof.png"
         review.write_bytes(b"user-held review output")
         cleanup.plan_run(self.project, "held-review", held, {"purpose": "Hold the review output at the user's request", "delete": ["."], "outputs": [], "retain": [{"path": review.name, "kind": "user-hold", "consumer": "User reviewing the output", "reason": "User requested this exact file", "until": "User releases the hold"}], "trigger": "verified-result-reported"})
         now = time.time()
-        with mock.patch.object(cleanup.time, "time", return_value=now + 2 * 86400), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+        with mock.patch.object(cleanup.time, "time", return_value=now + 48 * 3600 - 1), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             self.sweep()
         self.assertTrue(all(run.exists() for run in runs))
-        with mock.patch.object(cleanup.time, "time", return_value=now + cleanup.STALE_SECONDS + 100), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
+        with mock.patch.object(cleanup.time, "time", return_value=now + 48 * 3600 + 100), mock.patch.object(cleanup, "_process_identity", return_value=None), mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             result = self.sweep()
         self.assertIn("explicit user hold awaits owner release", [entry.get("reason") for entry in result["results"]])
         self.assertTrue(all(not run.exists() and not self.record_path(run).exists() for run in runs), result)
@@ -416,6 +419,34 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertFalse(run.exists(), result)
         self.assertFalse(self.record_path(run).exists())
         self.assertTrue(current.exists())
+
+    def test_sweep_cli_prioritizes_completed_runs_and_reports_unregistered_projects(self):
+        working = self.run_root("daily-cache-cleanup")
+        complete = self.run_root("delivered-build")
+        payload = b"completed build support"
+        (complete / "build.bin").write_bytes(payload)
+        cleanup.touch_run(self.project, "delivered-build", complete, state="complete")
+        other_project = self.root / "other-project"
+        legacy = other_project / "Cache" / "temp"
+        legacy.mkdir(parents=True)
+        missing = self.root / "unavailable-project"
+        command = [sys.executable, "-B", str(SCRIPTS / "task_cache_cleanup.py"), "sweep", "--task-id", "daily-cache-cleanup"]
+        for project in (self.project, missing, self.project, other_project):
+            command.extend(["--project-root", str(project)])
+
+        result = subprocess.run(command + ["--apply"], capture_output=True, text=True, timeout=60, **hidden_process_options())
+        self.assertEqual(result.returncode, 2, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["pending_count"], 1, report)
+        self.assertEqual(report["directories_deleted"], 1, report)
+        self.assertEqual(report["bytes_deleted"], len(payload), report)
+        self.assertEqual([entry["project_root"] for entry in report["projects"]], [str(self.project), str(other_project)])
+        self.assertEqual(report["projects"][0]["results"][0]["path"], str(complete))
+        self.assertEqual([entry["path"] for entry in report["projects"][1]["unclassified"]], [str(legacy)])
+        self.assertFalse(complete.exists())
+        self.assertFalse(self.record_path(complete).exists())
+        self.assertTrue(working.is_dir())
+        self.assertTrue(legacy.is_dir())
 
     def test_local_registry_uses_temp_name_and_preserves_legacy_live_owner(self):
         first = self.run_root()

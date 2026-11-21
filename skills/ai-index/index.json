@@ -45,14 +45,7 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "touch_run",
           "anchor": "def touch_run(project_root, task_id, run_root, *, artifact_root=None, state=\"working\", reason=None):",
-          "summary": "Update exact owned run; retain only planned necessary files and reject extra scratch; verify final output hashes before completion.",
-          "related": [
-            {
-              "module": "workflow",
-              "target": "cache-retention-contract-test",
-              "reason": "Checks reason rejection and due/legacy review without deletion."
-            }
-          ]
+          "summary": "Update exact owned run; retain only planned necessary files and reject extra scratch; verify final output hashes before completion. See the cache-retention-contract-test route."
         },
         {
           "id": "cache-retention-release",
@@ -128,15 +121,22 @@
           "id": "cache-project-checkpoint",
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "checkpoint",
-          "anchor": "def checkpoint(project_root, task_id, *, artifact_root=None, phase=\"start\", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False):",
-          "summary": "Prioritize exact current-project owners, including records in a shared legacy registry, within the checkpoint budget; close verified delivery units with absence readback."
+          "anchor": "def checkpoint(project_root, task_id, *, artifact_root=None, phase=\"start\", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False, refresh_index=True):",
+          "summary": "Process exact owners and completed or resumable deletions first, then check older heartbeats within the project budget."
+        },
+        {
+          "id": "cache-multi-project-sweep",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "sweep",
+          "anchor": "def sweep(project_roots, task_id, *, apply=False, budget_seconds=30):",
+          "summary": "Deduplicate selected projects, apply their guarded checkpoints and report unregistered Cache and exact pending results for daily or manual cleanup."
         },
         {
           "id": "cache-retention-contract-test",
           "file": "workflow-skill/tests/test_task_cache_cleanup.py",
           "symbol": "TaskCacheCleanupTests.test_retention_requires_reason_and_expires_with_inactivity",
           "anchor": "def test_retention_requires_reason_and_expires_with_inactivity(self):",
-          "summary": "Require a concrete task-retention reason; expire unused task runs after 72 hours while preserving unknown producers and malformed records."
+          "summary": "Require a concrete task-retention reason; expire unused task runs after 48 hours while preserving unknown producers and malformed records."
         },
         {
           "id": "cache-native-consumer-test",

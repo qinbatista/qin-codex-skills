@@ -5,7 +5,7 @@
       "path": "Cache/temp-*",
       "kind": "task",
       "consumer": "Current task scratch, isolated verification and release candidates; exact necessary active/recovery inputs or explicit user holds only",
-      "cleanup": "Pre-work cleanup plan; delete each verified and reported unit immediately; 72 hours only for abandoned units and native checks"
+      "cleanup": "Pre-work cleanup plan; delete each verified and reported unit immediately; 48 hours only for abandoned units and native checks"
     },
     {
       "path": "Cache/remote-task-cache-registry",

@@ -190,7 +190,7 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         self.assertEqual(rows["Cache/remote-assets"]["kind"], "remote_requires_review")
         self.assertEqual(rows["Cache/remote-assets"]["sync"], "native manifest synchronization")
         self.assertEqual(rows["Cache/remote-local-case"]["kind"], "remote_requires_review")
-        self.assertEqual(inventory["cleanup_after_idle_seconds"], 259200)
+        self.assertEqual(inventory["cleanup_after_idle_seconds"], 48 * 3600)
         self.assertEqual(inventory["codex_sessions"], "user_managed_excluded")
         self.assertNotIn("payload.bin", json.dumps(inventory))
         self.assertEqual(task.read_text(), "consumed compiler output")
