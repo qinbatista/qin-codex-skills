@@ -1,6 +1,6 @@
 ---
 name: optimization-skill
-description: "Use for requested optimization or an authorized reusable workflow improvement. Preserve intended behavior and measure claimed gains; repetition or shorter prose alone is not a reason to expand scope."
+description: "Plan local execution for repeatable work and make authorized optimizations. Reuse existing commands, preserve intended behavior, and measure claimed gains."
 ---
 
 # Optimization Skill
@@ -13,16 +13,22 @@ Optimize only the requested code, prompt, Skill, or process. Briefly explain the
 
 Read relevant project memory on every task through [project memory](../project-memory-skill/SKILL.md). If unavailable, continue. Keep projects separate and use fresh evidence over stale notes. Record shared preferences globally only when the user makes them global.
 
+## Run repeatable work locally
+
+Choose test, diagnostic, or other multi-step operations that can run consistently from explicit inputs and produce a checkable result. Reuse an existing test runner, CLI, or script that performs the work in one local command. If no command fits, implement a small parameterized helper with the project or Skill that owns the operation when the task authorizes it and expected reuse justifies maintaining it. Keep one-run adapters in task Cache.
+
+Document the reusable command, its inputs, expected output, and how it signals failure. Run it in the active task with a representative input and verify the output and any failure behavior that affects acceptance. Use the result to guide diagnosis and decisions that require judgment.
+
 ## Workflow
 
 1. Identify the owning path, expected output, and behavior that must remain: order, side effects, cancellation, failure semantics, and public contracts.
 2. Capture a representative baseline when claiming performance or behavior preservation.
-3. Choose the smallest useful change. For Skill work, follow the [authoring rules](../management-skill/SKILL.md#authoring-rules): simplify the workflow, reuse local code for deterministic mechanics, and keep per-run data in the project Cache task owner. Do not replace sound reasoning with brittle automation.
+3. Choose the smallest useful change. Use [local execution](#run-repeatable-work-locally) for suitable repeatable steps. Apply [Management's authoring rules](../management-skill/SKILL.md#authoring-rules) to Skill revisions.
 4. Apply the relevant code or prompt preferences and change only the authorized scope.
 5. Verify during the active task with identical inputs and the smallest real comparison or output readback. For complex or high-risk changes, an independent review can run inside the same task. Do not start or compile the whole project unless requested.
-6. Report the artifact, measured comparison, and remaining limitations. Ending records useful project memory alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md); it does not re-verify, repair code or benchmark.
+6. Report the verified result, any measured gains, and remaining limitations. Ending records useful project memory alongside [Workflow's resource audit](../workflow-skill/references/ending-resource-audit.md); it does not re-verify, repair code or benchmark.
 
-For a Skill-root review, the optional `scripts/skill_optimizer.py scan <skills-root>` lists visible Skills; `audit <skill-path>` checks references and duplicate instructions. Use these when they save work, not as required pre-reading ceremony.
+For a Skill review, the optional `scripts/skill_optimizer.py` supports `scan <skills-root>` to list Skills and `audit <skill-path>` to check references, duplicate instructions, and possible uses for local tools. Run `verify <skill-path>` to check references and supported scripts in one command.
 
 For `verify`, Python syntax is checked in memory. macOS AppleScript compilation requires `TMPDIR`, `TEMP` or `TMP` to point inside the current project's `Cache/temp-*` run; without that owner, the check reports an error instead of writing to system temporary storage.
 

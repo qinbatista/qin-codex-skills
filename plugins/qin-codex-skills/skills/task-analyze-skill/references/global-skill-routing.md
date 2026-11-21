@@ -11,7 +11,7 @@ The global pack root is `~/.agents/skills`. The paths in this guide are below th
 | Write, refactor, repair, or review code and run language-neutral or Python checks | `qin-codex-skills/code-skill/SKILL.md` |
 | Create, edit, or test a reusable prompt or durable AI instructions | `qin-codex-skills/prompt-skill/SKILL.md` |
 | Select verification evidence or verify changed behavior and consequential outputs | `qin-codex-skills/verify-skill/SKILL.md` |
-| Simplify, optimize, or measure an existing code path or workflow | `qin-codex-skills/optimization-skill/SKILL.md` |
+| Plan local execution for repeatable tests, diagnostics, or multi-step operations, or optimize an existing code path or workflow | `qin-codex-skills/optimization-skill/SKILL.md` |
 | Recall or maintain project knowledge in Obsidian | `qin-codex-skills/project-memory-skill/SKILL.md` |
 | Maintain Skills, manage installation, or maintain project AI indexes | `qin-codex-skills/management-skill/SKILL.md` |
 | Write or review C# and change Unity gameplay, serialized state, Jobs, resources, or SDK integrations | `qin-unity-skills/unity-code-skill/SKILL.md` |
