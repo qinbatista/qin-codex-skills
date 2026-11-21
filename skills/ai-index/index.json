@@ -640,6 +640,20 @@
           "summary": "Stage selected source in a short project Cache candidate path before isolated installation and release validation."
         },
         {
+          "id": "publication-upstream-integration",
+          "file": "management-skill/scripts/sync_global_skills.py",
+          "symbol": "integrate_publication_upstream",
+          "anchor": "def integrate_publication_upstream(source_dir, upstream, include_commits=None):",
+          "summary": "Fetch the configured branch and reject incoming or outgoing merge commits before changing the working branch or its index."
+        },
+        {
+          "id": "publication-upstream-merge-test",
+          "file": "management-skill/tests/test_sync_global_skills_readme.py",
+          "symbol": "SyncGlobalSkillsReadmeTest.test_publication_rejects_an_incoming_merge_beneath_a_linear_tip",
+          "anchor": "def test_publication_rejects_an_incoming_merge_beneath_a_linear_tip(self):",
+          "summary": "Reject a remote merge below a single-parent tip and preserve the original branch, staged changes and untracked files in a real Git fixture."
+        },
+        {
           "id": "regression-command-owner",
           "file": "management-skill/scripts/global_skill_regression_gate.py",
           "symbol": "command_result",

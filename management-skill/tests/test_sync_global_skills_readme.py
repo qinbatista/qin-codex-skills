@@ -1507,6 +1507,35 @@ class SyncGlobalSkillsReadmeTest(ProjectCacheTestCase):
         self.assertEqual(sync_global_skills.repository_head(source_dir), target)
         self.assertEqual(sync_global_skills.run_command(["git", "rev-list", "--min-parents=2", "HEAD"], cwd=source_dir).stdout, "")
 
+    def test_publication_rejects_an_incoming_merge_beneath_a_linear_tip(self):
+        source_dir, remote_dir = self.publication_repository()
+        base = sync_global_skills.repository_head(source_dir)
+        git = sync_global_skills.run_command
+        peer = source_dir.parent / "peer"
+        git(["git", "clone", "--branch", "release-target", str(remote_dir), str(peer)])
+        git(["git", "config", "user.name", "Remote Fixture"], cwd=peer)
+        git(["git", "config", "user.email", "remote@example.invalid"], cwd=peer)
+        git(["git", "switch", "-c", "fixture-side"], cwd=peer)
+        self.advance_local_publication_commit(peer, "side.md", "side\n")
+        git(["git", "switch", "release-target"], cwd=peer)
+        self.advance_local_publication_commit(peer, "upstream.md", "upstream\n")
+        git(["git", "merge", "--no-ff", "--no-edit", "fixture-side"], cwd=peer)
+        merge = sync_global_skills.repository_head(peer)
+        tip = self.advance_local_publication_commit(peer, "after.md", "after the merge\n")
+        git(["git", "push", "origin", "HEAD:refs/heads/release-target"], cwd=peer)
+
+        (source_dir / "AGENTS.md").write_text("# Keep staged guidance\n", encoding="utf-8")
+        git(["git", "add", "--", "AGENTS.md"], cwd=source_dir)
+        (source_dir / "untracked.txt").write_text("preserve\n", encoding="utf-8")
+        state = sync_global_skills.dirty_source_signature(source_dir)
+        upstream = sync_global_skills.publication_upstream(source_dir)
+        with self.assertRaisesRegex(RuntimeError, f"incoming merge commits.*{merge}"):
+            sync_global_skills.integrate_publication_upstream(source_dir, upstream)
+        self.assertEqual(sync_global_skills.repository_head(source_dir), base)
+        self.assertEqual(sync_global_skills.dirty_source_signature(source_dir), state)
+        self.assertEqual(sync_global_skills.remote_branch_head(source_dir, upstream), tip)
+        self.assertEqual(git(["git", "stash", "list"], cwd=source_dir).stdout, "")
+
     def test_push_missing_upstream_preserves_head_work_and_index(self):
         source_dir, remote_dir = self.publication_repository(configured_upstream=False)
         selected = source_dir / "verify-skill/SKILL.md"

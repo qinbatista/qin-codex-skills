@@ -1778,6 +1778,13 @@ def integrate_publication_upstream(source_dir, upstream, include_commits=None):
     unpublished_before_fetch = set(run_command(["git", "rev-list", previous_head, "--not", "--remotes"], cwd=source_dir).stdout.splitlines())
     run_command(["git", "fetch", "--no-tags", upstream["remote"], upstream["reference"]], cwd=source_dir)
     fetched_head = run_command(["git", "rev-parse", "FETCH_HEAD"], cwd=source_dir).stdout.strip()
+    incoming_range = f"{previous_head}..{fetched_head}"
+    upstream_merges = run_command(["git", "rev-list", "--min-parents=2", incoming_range], cwd=source_dir).stdout.splitlines()
+    if upstream_merges:
+        raise RuntimeError(
+            f"Publication pending: incoming merge commits on {upstream['remote']}:{upstream['reference']}: "
+            f"{', '.join(upstream_merges)}. Reconcile the upstream history before integrating it."
+        )
     ahead_commits = run_command(["git", "rev-list", f"{fetched_head}..{previous_head}"], cwd=source_dir).stdout.splitlines()
     local_merges = run_command(["git", "rev-list", "--min-parents=2", f"{fetched_head}..{previous_head}"], cwd=source_dir).stdout.strip()
     if local_merges:
@@ -1788,8 +1795,7 @@ def integrate_publication_upstream(source_dir, upstream, include_commits=None):
         unselected_commits = [commit for commit in ahead_commits if commit not in include_commits]
         if unselected_commits:
             raise RuntimeError(f"Publication pending: preexisting local commits need explicit --include-commit selection before delivery: {', '.join(unselected_commits)}")
-    ancestors = run_command(["git", "rev-list", f"{previous_head}..{fetched_head}"], cwd=source_dir).stdout.strip()
-    if not ancestors:
+    if not run_command(["git", "rev-list", "-1", incoming_range], cwd=source_dir).stdout.strip():
         return False
     if ahead_commits and any(commit not in unpublished_before_fetch for commit in ahead_commits):
         raise RuntimeError("Publication pending: divergent commits were already published; preserve history instead of rebasing them")
