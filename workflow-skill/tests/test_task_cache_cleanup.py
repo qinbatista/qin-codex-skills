@@ -1067,6 +1067,106 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         readback = json.loads(result.stdout)
         self.assertEqual(readback["registered"][0]["path"], str(run))
 
+    def test_cli_continuation_transfers_selected_inputs_and_removes_each_predecessor(self):
+        command = [sys.executable, "-B", str(SCRIPTS / "task_artifact_paths.py"), "--project-root", str(self.project), "--task-id", "repeat-build", "--create"]
+
+        def allocate(*arguments):
+            result = subprocess.run([*command, *arguments], capture_output=True, text=True, timeout=60, **hidden_process_options())
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return json.loads(result.stdout)
+
+        previous = Path(allocate()["task_root"])
+        sibling = self.run_root("repeat-build")
+        (sibling / "active.bin").write_bytes(b"another unit of the same task")
+        relative = "fixtures/source.bin"
+        required = previous / relative
+        required.parent.mkdir()
+        required.write_bytes(b"reusable build input")
+        os.utime(required, (1600000000, 1600000000))
+        for inputs in (["--input", relative], ["--input", relative], []):
+            (previous / "discarded-package.bin").write_bytes(b"old package" * 1024)
+            continued = allocate("--continue-from", str(previous), *inputs)
+            following = Path(continued["task_root"])
+            self.assertNotEqual(previous, following)
+            self.assertEqual(continued["previous_run_cleanup"], "removed")
+            self.assertFalse(previous.exists())
+            self.assertFalse(self.record_path(previous).exists())
+            self.assertEqual(set(self.base.glob("temp-*-*")) - {self.base / cleanup.REGISTRY}, {following, sibling})
+            self.assertEqual(continued["temporary_environment"]["TMPDIR"], str(following / "tmp"))
+            self.assertFalse((following / "discarded-package.bin").exists())
+            if inputs:
+                self.assertEqual((following / relative).read_bytes(), b"reusable build input")
+                self.assertEqual((following / relative).stat().st_mtime, 1600000000)
+                self.assertEqual(continued["transferred_inputs"], [{"path": relative, "sha256": hashlib.sha256(b"reusable build input").hexdigest()}])
+            else:
+                self.assertFalse((following / relative).exists())
+            previous = following
+        self.assertEqual((sibling / "active.bin").read_bytes(), b"another unit of the same task")
+        delivered = cleanup.checkpoint(self.project, "repeat-build", phase="delivery", current_run=previous, apply=True, requested_only=True)
+        self.assertTrue(delivered["requested_complete"], delivered)
+        self.assertEqual(set(self.base.glob("temp-*-*")) - {self.base / cleanup.REGISTRY}, {sibling})
+
+    def test_continuation_refuses_missing_and_held_inputs_then_reuses_verified_successor_on_retry(self):
+        source = self.run_root()
+        payload = source / "input.bin"
+        payload.write_bytes(b"keep across a failed continuation")
+        command = [str(SCRIPTS / "task_artifact_paths.py"), "--project-root", str(self.project), "--task-id", "mine", "--create", "--continue-from", str(source), "--input"]
+
+        def continue_with(name):
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with mock.patch.object(sys, "argv", [*command, name]), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                status = artifacts.main()
+            return status, json.loads((stdout.getvalue() if status == 0 else stderr.getvalue()).splitlines()[-1])
+
+        status, failure = continue_with("missing.bin")
+        self.assertEqual(status, 2, failure)
+        self.assertEqual(failure["cleanup"], "removed")
+        self.assertFalse(self.record_path(Path(failure["task_root"])).exists())
+        self.assertTrue(payload.is_file())
+
+        reader = subprocess.Popen([sys.executable, "-c",
+                                   "import sys; f=open(sys.argv[1], 'rb'); print('ready', flush=True); sys.stdin.read(1)",
+                                   str(payload)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                                  **hidden_process_options())
+        try:
+            self.assertEqual(reader.stdout.readline().strip(), "ready")
+            status, failure = continue_with(payload.name)
+            self.assertEqual(status, 2, failure)
+            self.assertIn("consumer check", failure["reason"])
+            self.assertEqual(failure["cleanup"], "removed")
+            self.assertTrue(payload.is_file())
+        finally:
+            reader.communicate("x", timeout=10)
+
+        record = cleanup._read(self.record_path(source))
+        plan = record["cleanup_plan"]
+        held = {"path": payload.name, "kind": "user-hold", "consumer": "exact user review", "reason": "keep this input", "until": "user release"}
+        cleanup.plan_run(self.project, "mine", source, plan | {"retain": [held]})
+        status, failure = continue_with(payload.name)
+        self.assertEqual(status, 2, failure)
+        self.assertIn("explicit user hold", failure["reason"])
+        self.assertEqual(failure["cleanup"], "removed")
+
+        cleanup.plan_run(self.project, "mine", source, plan | {"retain": [held | {"kind": "recovery-input"}]})
+        cleanup.touch_run(self.project, "mine", source, state="recovery", reason="This input is needed by the retry")
+        with mock.patch.object(cleanup, "_remove_snapshot", side_effect=OSError("forced deletion interruption")):
+            status, pending = continue_with(payload.name)
+        self.assertEqual(status, 2, pending)
+        self.assertEqual(pending["status"], "pending")
+        self.assertIsNone(pending["temporary_environment"])
+        following = Path(pending["task_root"])
+        self.assertEqual((following / payload.name).read_bytes(), payload.read_bytes())
+        self.assertTrue(cleanup._plan_path(self.record_path(source)).is_file())
+
+        status, resumed = continue_with(payload.name)
+        self.assertEqual(status, 0, resumed)
+        self.assertEqual(resumed["run_id"], pending["run_id"])
+        self.assertEqual(resumed["previous_run_cleanup"], "removed")
+        self.assertFalse(source.exists())
+        self.assertFalse(self.record_path(source).exists())
+        self.assertFalse(cleanup._plan_path(self.record_path(source)).exists())
+        self.assertTrue((following / payload.name).is_file())
+
     @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "native POSIX activity check")
     def test_allocator_main_and_cleanup_main_complete_real_cli_lifecycle(self):
         if not shutil.which("lsof") or not shutil.which("ps"):

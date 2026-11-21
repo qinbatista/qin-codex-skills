@@ -41,6 +41,7 @@ BARRIERS = {".git", ".keep", ".retain", ".task-cache-retain", ".codex-task-resou
 MAX_ENTRIES = 1000000
 MAX_PLAN_BYTES = 256 * 1024 * 1024
 LOCK_PROTOCOL = "task-cache-native-lock-v1"
+DELETION_PROGRESS_FIELDS = {"state", "block_reason", "deletion_plan", "deletion_error", "deletion_attempt_at", "continuation_process"}
 
 
 def _native_file_lock(stream, acquire):
@@ -450,6 +451,15 @@ def _retention_fields(state, reason, now, plan=None):
     return {"retention_reason": reason.strip(), "retention_review_at": now + STALE_SECONDS}
 
 
+def _verify_final_outputs(plan):
+    for output in plan.get("outputs", []):
+        destination = artifacts._absolute_path(output["path"], "final output")
+        artifacts._check_ancestors(destination.parent)
+        _safe_stat(destination)
+        if not output.get("sha256") or artifacts._file_sha256(destination) != output["sha256"]:
+            raise ValueError("final output is missing or differs from its verified handoff hash")
+
+
 def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="working", reason=None):
     if state not in STATES:
         raise ValueError("invalid lifecycle state")
@@ -485,12 +495,7 @@ def touch_run(project_root, task_id, run_root, *, artifact_root=None, state="wor
             plan = record.get("cleanup_plan", {})
             if plan.get("retain"):
                 raise ValueError("handoff necessary retained files and clear the plan before delivery")
-            for output in plan.get("outputs", []):
-                destination = artifacts._absolute_path(output["path"], "final output")
-                artifacts._check_ancestors(destination.parent)
-                _safe_stat(destination)
-                if not output.get("sha256") or artifacts._file_sha256(destination) != output["sha256"]:
-                    raise ValueError("final output is missing or differs from its verified handoff hash")
+            _verify_final_outputs(plan)
         record.update(state=state, heartbeat=now)
         _write(record_path, record)
     return {**record, "cache_index": _refresh_cache_index(project)}
@@ -917,8 +922,7 @@ def _write_deletion_plan(record_path, record, snapshot):
     target = _plan_path(record_path)
     artifacts._check_ancestors(target.parent)
     target.parent.mkdir(exist_ok=True)
-    ignored = {"state", "block_reason", "deletion_plan", "deletion_error", "deletion_attempt_at"}
-    plan = {"schema_version": 1, "authority": {key: value for key, value in record.items() if key not in ignored}, "snapshot": snapshot}
+    plan = {"schema_version": 1, "authority": {key: value for key, value in record.items() if key not in DELETION_PROGRESS_FIELDS}, "snapshot": snapshot}
     temporary = target.with_name(target.name + ".pending")
     created = None
     try:
@@ -960,8 +964,7 @@ def _read_deletion_plan(record_path, record):
     plan = json.loads(raw)
     if not isinstance(plan, dict):
         raise ValueError("invalid original deletion proof")
-    ignored = {"state", "block_reason", "deletion_plan", "deletion_error", "deletion_attempt_at"}
-    authority = {key: value for key, value in record.items() if key not in ignored}
+    authority = {key: value for key, value in record.items() if key not in DELETION_PROGRESS_FIELDS}
     if plan.get("schema_version") != 1 or plan.get("authority") != authority:
         raise ValueError("deletion owner or retention evidence changed")
     snapshot = plan.get("snapshot", {})
@@ -1046,6 +1049,127 @@ def _remove_snapshot(path, snapshot, *, deadline=None):
             current.unlink()
 
 
+def _continuation_record_path(project, run):
+    base = project / "Cache"
+    if run.parent != base or artifacts.RUN_NAME_RE.fullmatch(run.name) is None:
+        raise ValueError("continuation requires an exact project Cache execution directory")
+    return _registry(base, project) / "runs" / (_key(run) + ".json")
+
+
+def _owned_continuation_record(project, task_id, run, record_path):
+    record = _read(record_path)
+    if (record["task_id"], record["project_root"], record["path"], record["run_id"], record["location"]) != (
+        task_id, str(project), str(run), artifacts.task_artifact_run_id(run), "project"
+    ):
+        raise ValueError("continuation does not own the exact project/task/run")
+    if not _record_identity_matches(run, record):
+        raise ValueError("continuation run identity changed")
+    return record
+
+
+def _verify_continued_inputs(project, task_id, handoff):
+    destination = artifacts._absolute_path(handoff["path"], "continuation destination")
+    record_path = _continuation_record_path(project, destination)
+    record = _owned_continuation_record(project, task_id, destination, record_path)
+    if record["state"] != "working" or record["identity"] != handoff["identity"]:
+        raise ValueError("continuation destination is no longer the verified working run")
+    for item in handoff["inputs"]:
+        path = destination.joinpath(*item["path"].split("/"))
+        if not path.is_relative_to(destination) or ".." in path.parts:
+            raise ValueError("continuation input escaped its destination")
+        artifacts._check_ancestors(path.parent)
+        _safe_stat(path)
+        if artifacts._file_sha256(path) != item["sha256"]:
+            raise ValueError("continuation destination input changed: " + item["path"])
+    return destination
+
+
+def _another_producer_is_live(pid, recorded_identity, deadline):
+    if pid == os.getpid():
+        return False
+    live = _process_identity(pid, deadline)
+    return live == "unverified" or (live is not None and recorded_identity in {live, "unverified"})
+
+
+def _continuation_process():
+    pid = os.getpid()
+    return {"pid": pid, "identity": _process_identity(pid)}
+
+
+def claim_run_continuation(project_root, task_id, previous, inputs):
+    """Resume a verified successor exclusively while its old run awaits deletion."""
+    project = Path(project_root).resolve(strict=True)
+    source = artifacts._absolute_path(previous, "previous run")
+    record_path = _continuation_record_path(project, source)
+    with _lock(record_path):
+        record = _owned_continuation_record(project, task_id, source, record_path)
+        handoff = record.get("continuation")
+        if handoff is None:
+            return None
+        if record["state"] != "blocked" or sorted(inputs) != sorted(item["path"] for item in handoff["inputs"]):
+            raise ValueError("retry the pending continuation with its original input selection")
+        owner = record["continuation_process"]
+        if _another_producer_is_live(owner["pid"], owner["identity"], time.monotonic() + 5):
+            raise ValueError("another process is already continuing this run")
+        _verify_continued_inputs(project, task_id, handoff)
+        record["continuation_process"] = _continuation_process()
+        _write(record_path, record)
+        return handoff
+
+
+def prepare_run_continuation(project_root, task_id, previous, following, inputs):
+    """Verify selected inputs in the successor and bind old-run deletion to the original proof."""
+    project = Path(project_root).resolve(strict=True)
+    source = artifacts._absolute_path(previous, "previous run")
+    destination = artifacts._absolute_path(following, "next run")
+    if source == destination:
+        raise ValueError("continuation requires a fresh execution directory")
+    record_path = _continuation_record_path(project, source)
+    destination_record = _continuation_record_path(project, destination)
+    deadline = time.monotonic() + 30
+    with _lock(record_path):
+        record = _owned_continuation_record(project, task_id, source, record_path)
+        if record["state"] not in STATES - {"blocked"}:
+            raise ValueError("previous run already has a pending deletion or continuation")
+        successor = _owned_continuation_record(project, task_id, destination, destination_record)
+        if successor["state"] != "working":
+            raise ValueError("continuation destination must be a fresh working run")
+        plan = record.get("cleanup_plan", {})
+        if not record.get("retention_release"):
+            retained = plan.get("retain", [])
+            if any(item["kind"] == "user-hold" for item in retained):
+                raise ValueError("explicit user hold awaits owner release")
+            if any(Path(item["path"]).as_posix() not in inputs for item in retained):
+                raise ValueError("continuation must transfer each planned retained file")
+        _verify_final_outputs(plan)
+        _bound_path(source, project, project / "Cache")
+        if _another_producer_is_live(record["creator_pid"], record["creator_identity"], deadline):
+            raise ValueError("previous run has a live or unverified producer")
+        registry = record_path.parent.parent
+        original = _snapshot(source, deadline, include_ctime=True, registry=registry)
+        activity = probe_activity(source, deadline=deadline)
+        if not activity["safe"]:
+            raise ValueError("previous run consumer check: " + activity["reason"])
+        receipts = artifacts.copy_run_inputs(project, source, destination, inputs, preserve_metadata=True) if inputs else []
+        # Start a fresh bounded inspection after the potentially large input transfer.
+        deadline = time.monotonic() + 30
+        proof = _snapshot(source, deadline, include_ctime=True, registry=registry)
+        if proof["entries"] != original["entries"] or proof["file_ctimes"] != original["file_ctimes"]:
+            raise ValueError("previous run changed during continuation; original inputs preserved")
+        handoff = {"path": str(destination), "identity": successor["identity"], "inputs": receipts}
+        record["continuation"] = handoff
+        record["continuation_process"] = _continuation_process()
+        _begin_deletion(record_path, record, proof)
+    return handoff
+
+
+def _begin_deletion(record_path, record, proof):
+    record["deletion_plan"] = _write_deletion_plan(record_path, record, proof)
+    record["state"] = "blocked"
+    record["block_reason"] = "deletion started; resume only the unchanged original proof"
+    _write(record_path, record)
+
+
 def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline):
     with _lock(record_path):
         record = _read(record_path)
@@ -1076,7 +1200,13 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             _bound_path(path, project, base)
             if not _record_identity_matches(path, record):
                 raise ValueError("interrupted run identity changed")
+            if record.get("continuation"):
+                owner = record["continuation_process"]
+                if _another_producer_is_live(owner["pid"], owner["identity"], deadline):
+                    return {**result, "action": "keep", "reason": "another process is already continuing this run"}
             original = _read_deletion_plan(record_path, record)
+            if record.get("continuation"):
+                _verify_continued_inputs(project, record["task_id"], record["continuation"])
             remaining = _remaining_deletion(path, original, deadline, record_path.parent.parent)
             for attempt in range(2):
                 activity = probe_activity(path, deadline=deadline)
@@ -1138,10 +1268,7 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
         proof = _snapshot(path, deadline, include_ctime=True, registry=record_path.parent.parent)
         if proof["entries"] != snapshot["entries"]:
             raise ValueError("run changed during consumer readback")
-        record["deletion_plan"] = _write_deletion_plan(record_path, record, proof)
-        record["state"] = "blocked"
-        record["block_reason"] = "deletion started; resume only the unchanged original proof"
-        _write(record_path, record)
+        _begin_deletion(record_path, record, proof)
         return _finish_deletion(record_path, record, path, proof, result, deadline)
 
 

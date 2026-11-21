@@ -108,14 +108,14 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "_sweep_record",
           "anchor": "def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline):",
-          "summary": "Clean completed and abandoned units under native guards and preserve explicit user holds until owner release."
+          "summary": "Clean completed and abandoned units under native guards, verify continuation inputs on resumed deletion, and preserve explicit user holds until owner release."
         },
         {
           "id": "artifact-allocation",
           "file": "workflow-skill/scripts/task_artifact_paths.py",
           "symbol": "resolve_task_artifact_root",
           "anchor": "def resolve_task_artifact_root(",
-          "summary": "Allocate fresh project Cache execution roots only after native macOS backup exclusion verifies and relative Git ignore checks pass, then close eligible predecessors and report bounded owner diagnostics."
+          "summary": "Allocate fresh project Cache execution roots after backup and Git checks, preserving a selected predecessor during allocation for the continuation handoff."
         },
         {
           "id": "cache-git-isolation",
