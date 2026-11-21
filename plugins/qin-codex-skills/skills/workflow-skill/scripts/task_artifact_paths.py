@@ -281,6 +281,7 @@ def resolve_task_artifact_root(
     artifact_root: str | Path | None = None,
     environ: Mapping[str, str] | None = None,
     create: bool = False,
+    protect_run: Path | None = None,
 ) -> Path:
     """Allocate a fresh execution path; only an explicit run ID resolves it again."""
     if not isinstance(task_id, str) or not task_id.strip() or any(ord(char) < 32 for char in task_id):
@@ -298,7 +299,7 @@ def resolve_task_artifact_root(
         path.parent.mkdir(parents=True, exist_ok=True)
         _ensure_cache_backup_exclusion(path.parent)
         try:
-            checkpoint = task_cache_cleanup.checkpoint(project_root, task_id, artifact_root=path.parent, phase="start", current_run=path, apply=True, budget_seconds=5)
+            checkpoint = task_cache_cleanup.checkpoint(project_root, task_id, artifact_root=path.parent, phase="start", current_run=protect_run or path, apply=True, budget_seconds=5)
         except (OSError, ValueError) as error:
             checkpoint = {"bytes_deleted": 0, "results": [{"action": "pending", "reason": str(error)}]}
         actionable = [item for item in checkpoint["results"] if item["action"] in {"deleted", "pending"}]
@@ -331,7 +332,7 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def copy_run_inputs(project_root: str | Path, source_root: str | Path, destination_root: str | Path, relative_paths: list[str]) -> list[dict[str, str]]:
+def copy_run_inputs(project_root: str | Path, source_root: str | Path, destination_root: str | Path, relative_paths: list[str], *, preserve_metadata=False) -> list[dict[str, str]]:
     """Copy only selected files into a new run, with independent byte readback."""
     source = validate_external_directory(source_root, project_root)
     destination = validate_external_directory(destination_root, project_root)
@@ -370,6 +371,10 @@ def copy_run_inputs(project_root: str | Path, source_root: str | Path, destinati
                 identity = os.fstat(writer.fileno())
                 created.append((target, identity.st_dev, identity.st_ino))
                 shutil.copyfileobj(reader, writer)
+                if preserve_metadata:
+                    writer.flush()
+                    shutil.copystat(original, target, follow_symlinks=False)
+                    os.fsync(writer.fileno())
             source_digest = _file_sha256(original)
             copied_digest = _file_sha256(target)
             current = original.lstat()
@@ -428,21 +433,48 @@ def main() -> int:
     parser.add_argument("--run-id", help="Resolve one already allocated run; omit for a new execution")
     parser.add_argument("--artifact-root", type=Path)
     parser.add_argument("--create", action="store_true")
-    parser.add_argument("--copy-from", type=Path)
+    predecessor = parser.add_mutually_exclusive_group()
+    predecessor.add_argument("--continue-from", type=Path, help="Replace this exact previous run of the same task after transferring selected inputs")
+    predecessor.add_argument("--copy-from", type=Path, help="Copy selected inputs without retiring their source")
     parser.add_argument("--input", action="append", default=[], help="Selected useful relative input file; repeat as needed")
     arguments = parser.parse_args()
     root = None
     created_root = None
     try:
-        if bool(arguments.copy_from) != bool(arguments.input) or (arguments.copy_from and not arguments.create):
+        previous = arguments.continue_from
+        if previous and (not arguments.create or arguments.run_id):
+            raise ValueError("--continue-from requires --create with a fresh execution ID")
+        if not previous and (bool(arguments.copy_from) != bool(arguments.input) or (arguments.copy_from and not arguments.create)):
             raise ValueError("--copy-from and --input require a newly created execution directory")
-        root = resolve_task_artifact_root(arguments.project_root, arguments.task_id, run_id=arguments.run_id, artifact_root=arguments.artifact_root, create=arguments.create)
-        created_root = root if arguments.create else None
+        handoff = task_cache_cleanup.claim_run_continuation(arguments.project_root, arguments.task_id, previous, arguments.input) if previous else None
+        if handoff:
+            root = Path(handoff["path"])
+        else:
+            root = resolve_task_artifact_root(arguments.project_root, arguments.task_id, run_id=arguments.run_id, artifact_root=arguments.artifact_root, create=arguments.create, protect_run=previous)
+            created_root = root if arguments.create else None
         copied = copy_run_inputs(arguments.project_root, arguments.copy_from, root, arguments.input) if arguments.copy_from else []
-        environment = task_artifact_environment(root, create=True) if arguments.create else None
-        print(json.dumps({"status": "complete", "task_root": str(root), "run_id": task_artifact_run_id(root), "copied_inputs": copied, "temporary_environment": {name: environment[name] for name in ("TMP", "TEMP", "TMPDIR")} if environment else None}, sort_keys=True))
+        environment = task_artifact_environment(root, create=handoff is None) if arguments.create else None
+        result = {"status": "complete", "task_root": str(root), "run_id": task_artifact_run_id(root), "copied_inputs": copied, "temporary_environment": {name: environment[name] for name in ("TMP", "TEMP", "TMPDIR")} if environment else None}
+        if previous:
+            if handoff is None:
+                handoff = task_cache_cleanup.prepare_run_continuation(arguments.project_root, arguments.task_id, previous, root, arguments.input)
+            created_root = None  # The predecessor may now lose its original inputs.
+            result.update(transferred_inputs=handoff["inputs"], previous_run=str(previous))
+            try:
+                cleanup = task_cache_cleanup.checkpoint(arguments.project_root, arguments.task_id, phase="transition", current_run=root, obsolete_runs=[previous], apply=True, requested_only=True)
+                closed = cleanup["requested_complete"]
+                detail = cleanup["results"]
+            except (OSError, ValueError, KeyError) as error:
+                closed = False
+                detail = str(error)
+            if not closed:
+                result.update(status="pending", previous_run_cleanup=detail, temporary_environment=None)
+                print(json.dumps(result, sort_keys=True), file=sys.stderr)
+                return 2
+            result["previous_run_cleanup"] = "removed"
+        print(json.dumps(result, sort_keys=True))
         return 0
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, KeyError, TypeError) as error:
         cleanup = "not_created"
         cleanup_detail = None
         if created_root is not None:

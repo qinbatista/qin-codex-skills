@@ -34,15 +34,14 @@ Before allocating the next run, execute the [task-transition cleanup checkpoint]
 
 For a scoped executable producer, `task_artifact_paths.task_artifact_scope(project_root, task_id, borrowed_root=...)` closes its own registered run on every exit and preserves a borrowed outer owner. Move any requested evidence to its actual owner before leaving the scope. A failed closure remains visible with its exact pending reason; it cannot silently become successful cleanup.
 
-For continuation, allocate the new run first and inspect the earlier run's purpose, exact identity and current consumers. Copy only genuinely useful inputs, fixtures or minimum resumable state; do not copy its whole scratch tree, logs or build caches merely because they exist. Verify copied bytes and update consuming paths through a fresh reader. Delete the confirmed disposable old run once no live or recovery consumer still needs it, or immediately when no input is needed. Keep only the exact necessary files from the plan through their verified owner; an open chat or generic reuse claim supplies no retention.
-
-Use `copy_run_inputs(project_root, source_root, destination_root, relative_paths)` for an explicit file whitelist; it verifies independent copied bytes/hashes and rejects overwrite, links and traversal. The resolver CLI can allocate and copy in one invocation:
+For a retry of the same task, pass the exact previous registered run to `--continue-from`. List only the individual inputs, fixtures or minimum recovery files the retry needs. The allocator verifies the transferred bytes, retires the predecessor using the native cleanup checks, and returns the new root and temporary environment after the old directory and registration are gone. Use the same task ID and a fresh allocation. Omit `--input` when the previous run is entirely disposable.
 
 ```text
-python workflow-skill/scripts/task_artifact_paths.py --project-root ROOT --task-id CHAT --create --copy-from PREVIOUS_ROOT --input fixtures/file.json --input images/input.png
+macOS/Linux: python3 workflow-skill/scripts/task_artifact_paths.py --project-root ROOT --task-id TASK --create --continue-from PREVIOUS_ROOT --input fixtures/file.json --input images/input.png
+Windows PowerShell: py -3 workflow-skill\scripts\task_artifact_paths.py --project-root ROOT --task-id TASK --create --continue-from PREVIOUS_ROOT --input fixtures/file.json --input images/input.png
 ```
 
-Use the returned root and file hashes for readback. Omit copy options when no prior input is needed; never replace the whitelist with a directory clone.
+Start the producer with the returned root and environment after `status` is `complete`. Active producers, user holds and unmet output handoffs keep the predecessor intact. An interrupted deletion reports `pending` with the already verified successor and the reason. Retry the same command with the same input selection to finish that transition without allocating a duplicate. For an independent consumer that still needs to share inputs with an active run, use `--copy-from` and manage both owners separately.
 
 Release disposable stage files, child activity and worktrees as soon as that unit's result is verified in its real owner under [Task Resource Lifecycle](task-resource-lifecycle.md). Do not wait for the whole chat or Ending to finish. Requested final files leave scratch through verified delivery. Disposable environments are removed when the unit ends.
 
