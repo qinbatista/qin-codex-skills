@@ -20,6 +20,7 @@ The global pack root is `~/.agents/skills`. The paths in this guide are below th
 | Change Unity clips, Animator states, motion timing, bones, or rig transfer | `qin-unity-skills/unity-animation-skill/SKILL.md` |
 | Change Unity particles, VFX, shaders, or material effects | `qin-unity-skills/unity-effects-skill/SKILL.md` |
 | Verify Unity Editor, Play Mode, Player, device, build, or profiling behavior | `qin-unity-skills/unity-testing-skill/SKILL.md` |
+| Build a Unity package for testing | [Unity Testing's packaging route](https://github.com/qinbatista/qin-unity-skills/blob/master/unity-testing-skill/references/runtime-and-artifact-evidence.md#isolated-test-packaging) selects the producer. Apply [Workflow's Cache lifecycle](../../workflow-skill/references/project-cache-artifact-policy.md#plan-before-producing-files) to the selected owner's task run. |
 
 Code owns shared code policy. Unity Code owns C# and engine behavior, with only the common C# rules applying outside Unity. Verify owns evidence standards. Unity Testing selects the real Unity runner and runtime. Use Assets for imports and serialized references, UI for screen structure and input, Animation for motion playback, and Effects for appearance and emission. Apply additional entries only for work the task actually crosses. A linked game follows its current YoFaAssets source and local game rules before the reusable Unity guidance.
 
