@@ -448,6 +448,18 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertTrue(working.is_dir())
         self.assertTrue(legacy.is_dir())
 
+        registered = subprocess.run(
+            [sys.executable, "-B", str(SCRIPTS / "task_cache_cleanup.py"), "register",
+             "--project-root", str(other_project), "--task-id", "daily-cache-cleanup", "--run-root", str(legacy),
+             "--state", "complete", "--reason", "Verified empty test staging", "--skip-cache-index"],
+            capture_output=True, text=True, timeout=20, **hidden_process_options(),
+        )
+        self.assertEqual(registered.returncode, 0, registered.stderr)
+        self.assertEqual(json.loads(registered.stdout)["cache_index"]["reason"], "multi-project cleanup")
+        receipt = cleanup.sweep([other_project], "daily-cache-cleanup", apply=True)
+        self.assertEqual(receipt["directories_deleted"], 1, receipt)
+        self.assertFalse(legacy.exists())
+
     def test_local_registry_uses_temp_name_and_preserves_legacy_live_owner(self):
         first = self.run_root()
         registry = self.base / cleanup.REGISTRY

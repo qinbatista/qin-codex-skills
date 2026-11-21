@@ -366,7 +366,7 @@ def _bound_path(path, project, base):
     return location
 
 
-def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_reason=None, state="working"):
+def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_reason=None, state="working", refresh_index=True):
     if not isinstance(task_id, str) or not task_id.strip() or any(ord(char) < 32 for char in task_id):
         raise ValueError("task_id must be a nonempty identifier")
     if state not in STATES:
@@ -396,7 +396,8 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
         if record_path.exists():
             raise ValueError("run already registered; use touch/checkpoint without replacing ownership")
         _write(record_path, record)
-    return {**record, "cache_index": _refresh_cache_index(project)}
+    cache_index = _refresh_cache_index(project) if refresh_index else {"status": "skipped", "reason": "multi-project cleanup"}
+    return {**record, "cache_index": cache_index}
 
 
 def plan_run(project_root, task_id, run_root, plan, *, artifact_root=None):
@@ -1412,11 +1413,16 @@ def scan(project_root, artifact_root=None):
                 roots[base / ("p-" + _key(owner)[:16])] = owner
         except (OSError, ValueError, KeyError) as error:
             errors.append({"path": str(record_path), "reason": str(error)})
-    for root, owner in sorted(roots.items()):
+    seen = set()
+    for root, owner in roots.items():
         try:
             artifacts._check_ancestors(root)
             if not root.is_dir():
                 continue
+            identity = tuple(_identity(_safe_stat(root)))
+            if identity in seen:
+                continue
+            seen.add(identity)
             if root.name.lower() == "cache":
                 violations.extend(_cache_violations(root, owner))
                 remote_review.update((item["path"], item) for item in _remote_owner_review(root, owner))
@@ -1434,9 +1440,10 @@ def sweep(project_roots, task_id, *, apply=False, budget_seconds=30):
     for path in project_roots:
         try:
             project = Path(path).resolve(strict=True)
-            if project in seen:
+            identity = tuple(_identity(_safe_stat(project)))
+            if identity in seen:
                 continue
-            seen.add(project)
+            seen.add(identity)
             result = checkpoint(project, task_id, apply=apply, budget_seconds=budget_seconds, refresh_index=False)
         except (OSError, ValueError, KeyError) as error:
             errors.append({"project_root": str(path), "reason": str(error)})
@@ -1531,11 +1538,14 @@ def main():
     parser.add_argument("--search-root", type=Path, action="append", default=[])
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--requested-only", action="store_true", help="Close only explicit finished/obsolete runs, for nested owners and test fixtures")
+    parser.add_argument("--skip-cache-index", action="store_true", help="Register a reviewed legacy run without refreshing another project's AI index")
     parser.add_argument("--budget-seconds", type=float, default=30)
     args = parser.parse_args()
     try:
         if args.requested_only and args.command != "checkpoint":
             raise ValueError("--requested-only applies only to checkpoint")
+        if args.skip_cache_index and args.command != "register":
+            raise ValueError("--skip-cache-index applies only to register")
         if args.command in {"register", "plan", "touch", "release-retention", "checkpoint", "sweep"} and not args.task_id:
             raise ValueError("this command requires --task-id")
         if args.command == "sweep":
@@ -1558,7 +1568,7 @@ def main():
         elif args.command == "scan":
             result = scan(args.project_root, args.artifact_root)
         elif args.command == "register":
-            result = register_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, legacy_reason=args.reason, state=args.state)
+            result = register_run(args.project_root, args.task_id, args.run_root, artifact_root=args.artifact_root, legacy_reason=args.reason, state=args.state, refresh_index=not args.skip_cache_index)
         elif args.command == "plan":
             if args.plan is None:
                 raise ValueError("plan requires --plan JSON")

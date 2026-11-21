@@ -99,7 +99,7 @@ python task_cache_cleanup.py sweep --task-id TASK --project-root PROJECT_A --pro
 
 The sweep applies the same native checkpoint to each project and reads back the remaining Cache entries, including legacy folders such as `Cache/temp` even where a registry was never created. Check `directories_deleted`, `bytes_deleted`, and `pending_count`. `unclassified`, `violations`, and `remote_review` identify the exact candidates that need producer and owner evidence. An empty deletion set is a valid result. The sweep uses the original task registries and leaves cross-project AI-index guidance outside its write scope. Refresh the current project's own Cache index through its ordinary checkpoint.
 
-For unregistered build stages, exports and temporary folders, verify the producer, latest descendant activity, and final handoff or retirement before adopting the exact disposable run through `register`. Apply the checkpoint immediately after that verification. Explicitly retained outputs and live consumers stay with their native owners. Report verified removals and exact unresolved risks, then finish the sweep so ordinary work can continue.
+For unregistered build stages, exports and temporary folders, verify the producer, latest descendant activity, and final handoff or retirement before adopting the exact disposable run through `register`. Pass `--skip-cache-index` when registering for a multi-project sweep and apply the sweep immediately. Explicitly retained outputs and live consumers stay with their native owners. Report verified removals and exact unresolved risks, then finish the sweep so ordinary work can continue.
 
 ## Traverse and delete eligible temporary directories
 
