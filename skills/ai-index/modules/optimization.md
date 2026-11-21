@@ -2,6 +2,8 @@
 
 Start at [SKILL.md](../../../optimization-skill/SKILL.md). [skill_optimizer.py](../../../optimization-skill/scripts/skill_optimizer.py) and [audit_global_skills.py](../../../optimization-skill/scripts/audit_global_skills.py) are the relevant helper entry points; select the one matching the requested audit/optimization.
 
+For a Skill entrypoint audit, compare discovery triggers, required steps, exceptions, permissions, evidence and owner links before and after. Use `skill_optimizer.py verify` for each affected Skill's references and scripts, and the [release gate](testing-release.md) for candidate and isolated-installation acceptance when delivering global Skills.
+
 For repeatable tests, diagnostics, and multi-step work, select and verify a local command during task design. Reuse existing runners and scripts before considering a maintained helper. [Local execution guidance](../../../optimization-skill/SKILL.md#run-repeatable-work-locally)
 
 Keep changes within the requested scope. Preserve order, side effects, cancellation, failures and public contracts. Capture comparable baseline/output evidence for claimed gains; fewer words or repetition alone does not justify broader changes. One-off measurements use the current project Cache, and Ending never benchmarks or repairs the product. `validate_script` checks Python in memory and puts native AppleScript compiler output in an explicitly bound project Cache task run.
