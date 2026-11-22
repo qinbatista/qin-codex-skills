@@ -59,7 +59,7 @@ Run the leftover check across all tool-owned locations at inline closeout. Keep 
 
 For requested Cache, `temp-*`, multi-project or whole-computer cleanup, follow [Cache cleanup](references/cache-cleanup.md). Enumerate exact runs and consumers within scope. Release confirmed disposable Skill-generated support, including eligible legacy `Cache/temp-*` directly under explicit cleanup authorization. Preserve resources with live consumers, including in chats with already completed runs.
 
-For opted-in daily cleanup, check the date before project discovery and run the [multi-project sweep](references/cache-cleanup.md#daily-multi-project-sweep) on the first local task of the day. Continue after the sweep or an already-checked result. Report exact pending owners.
+For opted-in daily cleanup, read `daily_sweep` from the applied start checkpoint. Use `daily-status` when no project checkpoint runs. If due, verify the project selection and run the [multi-project sweep](references/cache-cleanup.md#daily-multi-project-sweep) before allocating new support. Report exact pending owners and continue independent work.
 
 ## Git branch ownership
 

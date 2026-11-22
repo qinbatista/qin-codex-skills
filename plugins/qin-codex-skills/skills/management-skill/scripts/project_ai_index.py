@@ -429,12 +429,16 @@ def collect_cache_inventory(root):
             try:
                 record = cache_json(entry)
                 path = Path(record.get("path", ""))
-                if not path.is_absolute() or not path.is_relative_to(cache) or record.get("project_root") != str(root):
+                owner = Path(record.get("project_root", ""))
+                if (not owner.is_absolute() or not path.is_relative_to(owner / "Cache")
+                        or not task_cache_cleanup._same_directory(owner, root)):
                     raise ValueError("registry owner is outside this project Cache")
                 reject_links(path)
                 if not path.exists():
                     continue
-                relative = path.relative_to(root).as_posix()
+                relative = path.relative_to(owner).as_posix()
+                if relative in rows:
+                    raise ValueError("multiple run records identify this Cache path")
                 observed = path.stat()
                 row = {"path": relative, "kind": "task", "state": str(record.get("state", "unknown"))[:32], "task_id": str(record.get("task_id", ""))[:200], "activity": "requires_native_consumer_check", "modified_at": observed.st_mtime}
                 for key in ("heartbeat", "retention_review_at"):
