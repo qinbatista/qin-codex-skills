@@ -122,14 +122,14 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "checkpoint",
           "anchor": "def checkpoint(project_root, task_id, *, artifact_root=None, phase=\"start\", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False, refresh_index=True):",
-          "summary": "Process exact owners and completed or resumable deletions first, then check older heartbeats within the project budget."
+          "summary": "Process exact owners and completed or resumable deletions first. Resolve registered Cache aliases by native identity and report exact closure within the project budget."
         },
         {
           "id": "cache-multi-project-sweep",
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "sweep",
           "anchor": "def sweep(project_roots, task_id, *, apply=False, budget_seconds=30):",
-          "summary": "Apply guarded checkpoints to distinct project identities and inventory legacy Cache. The first-task entry uses sweep_once_per_day to lock the host's local date."
+          "summary": "Run guarded checkpoints for verified project identities. Applied startup exposes daily status, and the daily sweep records the date only after a project check."
         },
         {
           "id": "cache-retention-contract-test",

@@ -470,6 +470,21 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         with mock.patch.object(cleanup, "_daily_sweep_state_path", return_value=state), mock.patch.object(cleanup, "date") as clock, mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
             clock.today.return_value = date(2026, 11, 20)
             self.assertEqual(cleanup.daily_sweep_status()["daily_status"], "due")
+            with self.assertRaisesRegex(ValueError, "at least one verified project root"):
+                cleanup.sweep_once_per_day([], "first-task")
+            empty_sweep = ["cleanup", "sweep", "--once-per-day", "--apply", "--task-id", "first-task"]
+            with mock.patch.object(sys, "argv", empty_sweep), contextlib.redirect_stderr(io.StringIO()) as error:
+                self.assertEqual(cleanup.main(), 2)
+            self.assertIn("requires --project-root", error.getvalue())
+            self.assertFalse(state.exists())
+            starter = self.root / "startup-project"
+            starter.mkdir()
+            startup = ["cleanup", "checkpoint", "--project-root", str(starter), "--task-id", "first-task", "--phase", "start", "--apply"]
+            with mock.patch.object(sys, "argv", startup), contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(cleanup.main(), 0)
+            startup_report = json.loads(output.getvalue())
+            self.assertEqual(startup_report["daily_sweep"]["daily_status"], "due")
+            self.assertEqual(startup_report["cleanup_after_idle_seconds"], 48 * 3600)
             self.assertFalse(state.exists())
             missing = cleanup.sweep_once_per_day([self.root / "unavailable"], "first-task")
             self.assertEqual(missing["daily_status"], "pending", missing)
@@ -500,6 +515,41 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
             self.assertEqual(receipt["directories_deleted"], 1, receipt)
             self.assertFalse(later.exists())
             self.assertEqual(state.read_text(encoding="ascii"), "2026-11-24\n")
+
+    @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "native POSIX activity check")
+    def test_case_alias_scan_and_cleanup_use_existing_native_owner(self):
+        alias = self.project.with_name(self.project.name.upper())
+        if not alias.is_dir() or not alias.samefile(self.project):
+            self.skipTest("fixture filesystem is case sensitive")
+        run = self.run_root()
+        payload = run / "consumed.bin"
+        payload.write_bytes(b"completed test output")
+        self.assertEqual(cleanup.scan(alias)["unclassified"], [])
+
+        # Both known spellings can have their own historical project documents.
+        cleanup.register_project(alias)
+        alias_run = alias / "Cache" / run.name
+        self.assertEqual(cleanup.scan(alias)["unclassified"], [])
+        result = self.finish_when_native_readers_close(run, lambda: cleanup.checkpoint(alias, "mine", phase="delivery", current_run=alias_run, apply=True))
+        self.assertTrue(result["requested_complete"], result)
+        self.assertFalse(alias_run.exists())
+        self.assertFalse(self.record_path(run).exists())
+
+        finished = self.run_root("old-test")
+        (finished / "consumed.bin").write_bytes(b"completed predecessor")
+        cleanup.touch_run(self.project, "old-test", finished, state="complete")
+        result = self.finish_when_native_readers_close(finished, lambda: cleanup.checkpoint(alias, "new-task", apply=True))
+        self.assertEqual([entry["action"] for entry in result["results"]], ["deleted"], result)
+        self.assertFalse(finished.exists() or self.record_path(finished).exists())
+
+        parent = self.run_root()
+        child = alias / "Cache" / parent.name / "nested"
+        child.mkdir()
+        cleanup.register_run(alias, "nested-owner", child, legacy_reason="Separate registered fixture owner")
+        guarded = self.sweep(phase="delivery", current_run=parent, requested_only=True)
+        self.assertFalse(guarded["requested_complete"], guarded)
+        self.assertTrue(any("registered descendant" in entry.get("reason", "") for entry in guarded["results"]), guarded)
+        self.assertTrue(child.exists())
 
     def test_local_registry_uses_temp_name_and_preserves_legacy_live_owner(self):
         first = self.run_root()
@@ -1097,7 +1147,11 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
             active = cleanup.probe_activity(run)
             self.assertFalse(active["safe"], active)
             self.assertEqual(active["reason"], "active open files or working directory", active)
-            result = self.sweep(phase="finish", current_run=run)
+            command = [sys.executable, "-B", str(SCRIPTS / "task_cache_cleanup.py"), "checkpoint", "--project-root", str(self.project), "--task-id", "mine", "--phase", "finish", "--current-run", str(run), "--apply"]
+            pending = subprocess.run(command, capture_output=True, text=True, timeout=30, **hidden_process_options())
+            self.assertEqual(pending.returncode, 2, pending.stderr)
+            result = json.loads(pending.stdout)
+            self.assertFalse(result["requested_complete"], result)
             self.assertEqual(result["results"][0]["action"], "keep", result)
             self.assertTrue(payload.exists())
             process.stdin.write("close\n")

@@ -187,6 +187,11 @@ class ProjectAIIndexTests(ProjectCacheTestCase):
         inventory = json.loads((self.project / folder / "current.json").read_text())
         rows = {row["path"]: row for row in inventory["entries"]}
         self.assertEqual(rows["Cache/temp-upload"]["state"], "complete")
+        alias = self.project.with_name(self.project.name.upper())
+        if alias.is_dir() and alias.samefile(self.project):
+            alias_inventory = INDEX.collect_cache_inventory(alias)
+            self.assertEqual(alias_inventory["issues"], [])
+            self.assertEqual(alias_inventory["entries"], inventory["entries"])
         self.assertEqual(rows["Cache/remote-assets"]["kind"], "remote_requires_review")
         self.assertEqual(rows["Cache/remote-assets"]["sync"], "native manifest synchronization")
         self.assertEqual(rows["Cache/remote-local-case"]["kind"], "remote_requires_review")

@@ -25,3 +25,5 @@ For [AI Index Compression](../../../management-skill/references/project-ai-index
 The `installer-closeout-merge`, `installer-closeout-status` and `installer-closeout-install` targets own explicit quiet-closeout repair. `install-global-agents --closeout-only` replaces one recognized legacy Ending paragraph or the managed inline block with a recoverable backup while preserving other global rules and vault routing. Ordinary deployment reports stale closeout activation separately without rewriting user guidance. `installer-closeout-real-test` executes the actual CLI and exact backup restoration; existing chats may retain old injected instructions.
 
 Installer lock recovery distinguishes a lock that disappeared during release from an existing unsafe entry. Use the `installer-lock-observation` target and exercise the concurrent wait and disappearing directory cases when changing it.
+
+Cache inventory uses the registered run's relative path after checking native project identity. Case aliases of the same project share the inventory, and duplicate run records surface a review issue.

@@ -94,6 +94,17 @@ def _identity(observed):
     return [observed.st_dev, observed.st_ino]
 
 
+def _same_directory(first, second):
+    if first == second:
+        return True
+    try:
+        artifacts._check_ancestors(first)
+        artifacts._check_ancestors(second)
+        return _identity(_safe_stat(first)) == _identity(_safe_stat(second))
+    except FileNotFoundError:
+        return False
+
+
 def _volume_identity(path):
     """macOS device numbers change after reboot; a volume UUID does not."""
     if sys.platform != "darwin":
@@ -137,6 +148,8 @@ def _cleanup_base(project, artifact_root=None):
         return artifacts.resolve_artifact_base(project, artifact_root=artifact_root)
     base = artifacts._absolute_path(artifact_root, "legacy artifact directory")
     artifacts._check_ancestors(base)
+    if _same_directory(base, project / "Cache"):
+        return artifacts.resolve_artifact_base(project)
     codex = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).resolve(strict=False)
     if (base == Path(base.anchor) or base == Path.home() or artifacts._codex_component(base)
             or any(artifacts._within(base, owner) for owner in (project, codex, Path.home() / ".agents"))
@@ -179,6 +192,45 @@ def _read(path):
     if not isinstance(value, dict) or value.get("schema_version") != SCHEMA:
         raise ValueError("unsupported resource registry record")
     return value
+
+
+def _cache_spellings(registry):
+    """Find registered names for this same link-free local Cache directory."""
+    if registry.name == LEGACY_REGISTRY:
+        return ()
+    base = registry.parent
+    roots = [base]
+    for record_path in sorted((registry / "projects").glob("*.json")):
+        try:
+            record = _read(record_path)
+            project = artifacts._absolute_path(record["project_root"], "registered project")
+            cache = project / "Cache"
+            if record_path.stem == _key(project) and cache not in roots and _same_directory(base, cache):
+                roots.append(cache)
+        except (OSError, ValueError, KeyError):
+            continue
+    return roots
+
+
+def _run_spellings(path, cache_roots):
+    if cache_roots:
+        for parent in path.parents:
+            if parent in cache_roots or (parent.name.lower() == "cache" and _same_directory(parent, cache_roots[0])):
+                artifacts._check_ancestors(path)
+                relative = path.relative_to(parent)
+                return tuple(dict.fromkeys((path, *(root / relative for root in cache_roots))))
+    return (path,)
+
+
+def _run_registration(path, registry, cache_roots):
+    matches = []
+    for candidate in _run_spellings(path, cache_roots):
+        record = registry / "runs" / (_key(candidate) + ".json")
+        if record.exists() or record.is_symlink():
+            matches.append(record)
+    if len(matches) > 1:
+        raise ValueError("multiple registry records identify the same run; exact owner review required")
+    return matches[0] if matches else None
 
 
 @contextlib.contextmanager
@@ -330,6 +382,7 @@ def _bound_path(path, project, base):
     artifacts._check_ancestors(path)
     if not path.is_dir():
         raise ValueError("run must be an existing exact directory")
+    base = _cleanup_base(project, base)
     registry = _registry(base, project)
     project_record = _read(registry / "projects" / (_key(project) + ".json"))
     roots = [artifacts._absolute_path(root, "registered Cache") for root in project_record["cache_roots"]]
@@ -347,15 +400,17 @@ def _bound_path(path, project, base):
         location, boundary = "legacy", max(matches, key=lambda value: len(value.parts))
     if _safe_stat(path).st_dev != _safe_stat(boundary).st_dev:
         raise ValueError("mounted resources require their native owner")
+    cache_roots = _cache_spellings(registry)
     for ancestor in path.parents:
         if ancestor == boundary:
             break
         if any((ancestor / marker).exists() or (ancestor / marker).is_symlink() for marker in BARRIERS):
             raise ValueError("ancestor Git, retention or native resource ledger is protected")
-        parent_record = registry / "runs" / (_key(ancestor) + ".json")
-        if parent_record.is_file():
+        parent_record = _run_registration(ancestor, registry, cache_roots)
+        if parent_record is not None:
             parent = _read(parent_record)
-            if parent.get("path") != str(ancestor) or parent.get("project_root") != str(project) or parent.get("state") in PROTECTED_STATES:
+            if (not _same_directory(Path(parent["path"]), ancestor)
+                    or not _same_directory(Path(parent["project_root"]), project) or parent.get("state") in PROTECTED_STATES):
                 raise ValueError("ancestor registered resource requires its owner's release")
     if project in path.parents and any((ancestor / ".git").exists() for ancestor in (project, *project.parents)):
         git = shutil.which("git")
@@ -388,13 +443,14 @@ def register_run(project_root, task_id, run_root, *, artifact_root=None, legacy_
     now = time.time()
     retention = _retention_fields(state, legacy_reason, now)
     snapshot = _snapshot(path)
-    record_path = _registry(base, project) / "runs" / (_key(path) + ".json")
+    registry = _registry(base, project)
+    record_path = registry / "runs" / (_key(path) + ".json")
     record = {"schema_version": SCHEMA, "path": str(path), "project_root": str(project), "task_id": task_id, "run_id": artifacts.task_artifact_run_id(path) if location == "project" else uuid.uuid4().hex, "location": location, "identity": snapshot["identity"], "state": state, "heartbeat": now, "registered_at": now, "creator_pid": os.getpid(), "creator_identity": _process_identity(os.getpid()), "disposable_reason": legacy_reason or "fresh task-owned disposable support allocation"}
     record["filesystem_uuid"] = _volume_identity(path)
     record.update(retention)
     record["cleanup_plan"] = {"purpose": task_id, "delete": ["."], "outputs": [], "retain": [], "trigger": "verified-result-reported"}
     with _lock(record_path):
-        if record_path.exists():
+        if _run_registration(path, registry, _cache_spellings(registry)) is not None:
             raise ValueError("run already registered; use touch/checkpoint without replacing ownership")
         _write(record_path, record)
     cache_index = _refresh_cache_index(project) if refresh_index else {"status": "skipped", "reason": "multi-project cleanup"}
@@ -576,6 +632,11 @@ def _file_change_time(path, observed):
 def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
     artifacts._check_ancestors(path)
     root = _safe_stat(path)
+    spellings = _run_spellings(path, _cache_spellings(registry)) if registry is not None else (path,)
+    for alternate in spellings[1:]:
+        record = registry / "runs" / (_key(alternate) + ".json")
+        if record.exists() or record.is_symlink():
+            raise ValueError("multiple registry records identify the same run; exact owner review required")
     entries = {}
     latest = 0
     byte_count = 0
@@ -599,9 +660,10 @@ def _snapshot(path, deadline=None, *, include_ctime=False, registry=None):
             raise ValueError("run exceeds bounded inspection limit")
         if stat.S_ISDIR(observed.st_mode):
             if registry is not None and current != path:
-                child_record = registry / "runs" / (_key(current) + ".json")
-                if child_record.exists() or child_record.is_symlink():
-                    raise ValueError("registered descendant has a separate lifecycle; close its exact owner before the parent")
+                for spelling in spellings:
+                    child_record = registry / "runs" / (_key(spelling / relative) + ".json")
+                    if child_record.exists() or child_record.is_symlink():
+                        raise ValueError("registered descendant has a separate lifecycle; close its exact owner before the parent")
             pending.extend(current.iterdir())
         else:
             byte_count += observed.st_size
@@ -1196,7 +1258,7 @@ def _sweep_record(record_path, base, task_id, current_run, apply, now, deadline)
             raise ValueError("invalid registered lifecycle state")
         if type(record.get("heartbeat")) not in (int, float) or not math.isfinite(record["heartbeat"]):
             raise ValueError("registered heartbeat is invalid; inactivity cannot be verified")
-        if path == current_run:
+        if current_run is not None and _same_directory(path, current_run):
             return {**result, "action": "keep", "reason": "current run"}
         if record["state"] == "blocked":
             if not record.get("deletion_plan"):
@@ -1294,6 +1356,19 @@ def _refresh_cache_index(project):
         return {"status": "pending", "reason": str(error)[:500]}
 
 
+def _checkpoint_owner(path, project, task_id, registry, cache_roots):
+    record_path = _run_registration(path, registry, cache_roots)
+    if record_path is None:
+        return path, project, None
+    record = _read(record_path)
+    owner = artifacts._absolute_path(record["project_root"], "registered project")
+    registered_run = artifacts._absolute_path(record["path"], "registered run")
+    if (record["task_id"] != task_id or not _same_directory(owner, project)
+            or record_path.stem != _key(registered_run) or registered_run not in _run_spellings(path, cache_roots)):
+        raise ValueError("checkpoint does not own the exact project/task/run")
+    return registered_run, owner, record["state"]
+
+
 def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", current_run=None, obsolete_runs=(), apply=False, budget_seconds=30, requested_only=False, refresh_index=True):
     if phase not in {"start", "transition", "delivery", "finish"}:
         raise ValueError("invalid checkpoint phase")
@@ -1303,32 +1378,32 @@ def checkpoint(project_root, task_id, *, artifact_root=None, phase="start", curr
     project = Path(project_root).resolve(strict=True)
     base = _cleanup_base(project, artifact_root)
     current = artifacts._absolute_path(current_run, "current_run") if current_run else None
-    requested = [artifacts._absolute_path(value, "obsolete_run") for value in obsolete_runs]
-    if phase in {"delivery", "finish"} and current is not None:
-        requested.append(current)
-    if requested_only and not requested:
+    obsolete = [artifacts._absolute_path(value, "obsolete_run") for value in obsolete_runs]
+    closing = phase in {"delivery", "finish"}
+    if requested_only and not obsolete and not (closing and current is not None):
         raise ValueError("requested-only cleanup requires exact finished or obsolete runs")
-    if current in [Path(value) for value in obsolete_runs]:
+    if current is not None and any(_same_directory(current, path) for path in obsolete):
         raise ValueError("current run cannot also be obsolete")
-    if not apply and (obsolete_runs or phase in {"delivery", "finish"}):
+    if not apply and (obsolete or closing):
         raise ValueError("lifecycle changes require --apply; scan is read-only")
-    for previous in obsolete_runs:
-        previous_path = Path(previous)
-        previous_record = _registry(base, project) / "runs" / (_key(previous_path) + ".json")
-        if previous_path.exists() and (not previous_record.exists() or _read(previous_record).get("state") != "blocked"):
-            touch_run(project, task_id, previous, artifact_root=base, state="obsolete")
-    if phase in {"delivery", "finish"}:
+    registry = _registry(base, project)
+    requested = []
+    if obsolete or closing:
+        cache_roots = _cache_spellings(registry)
+    for previous in obsolete:
+        path, owner, state = _checkpoint_owner(previous, project, task_id, registry, cache_roots)
+        if path.exists() and state != "blocked":
+            touch_run(owner, task_id, path, artifact_root=base, state="obsolete")
+        requested.append(path)
+    if closing:
         if current is None:
             raise ValueError("finish requires exact current_run")
-        current_record = _registry(base, project) / "runs" / (_key(current) + ".json")
-        if current_record.exists():
-            owner = _read(current_record)
-            if owner.get("task_id") != task_id or owner.get("project_root") != str(project) or owner.get("path") != str(current):
-                raise ValueError("finish does not own the exact project/task/run")
-            if current.exists() and owner["state"] != "blocked":
-                touch_run(project, task_id, current, artifact_root=base, state="complete")
-        elif current.exists() or current.is_symlink():
+        path, owner, state = _checkpoint_owner(current, project, task_id, registry, cache_roots)
+        if state is None and (path.exists() or path.is_symlink()):
             raise ValueError("finish cannot adopt an unregistered existing run")
+        if path.exists() and state != "blocked":
+            touch_run(owner, task_id, path, artifact_root=base, state="complete")
+        requested.append(path)
         current = None
     bases = [base]
     if base == project / "Cache":
@@ -1394,11 +1469,13 @@ def scan(project_root, artifact_root=None):
     records = []
     errors = []
     known = set()
+    cache_roots = _cache_spellings(directory)
     for record_path in sorted((directory / "runs").glob("*.json")):
         try:
             record = _read(record_path)
             records.append(record)
-            known.add(record["path"])
+            registered_run = artifacts._absolute_path(record["path"], "registered run")
+            known.update(str(path) for path in _run_spellings(registered_run, cache_roots))
         except (OSError, ValueError, KeyError) as error:
             errors.append({"path": str(record_path), "reason": str(error)})
     unknown = []
@@ -1410,7 +1487,7 @@ def scan(project_root, artifact_root=None):
             record = _read(record_path)
             owner = Path(record["project_root"])
             roots.update((Path(value), owner) for value in record["cache_roots"])
-            if base != owner / "Cache":
+            if base != project / "Cache":
                 roots[base / ("p-" + _key(owner)[:16])] = owner
         except (OSError, ValueError, KeyError) as error:
             errors.append({"path": str(record_path), "reason": str(error)})
@@ -1492,6 +1569,9 @@ def daily_sweep_status():
 
 def sweep_once_per_day(project_roots, task_id, *, budget_seconds=30):
     """Run an opted-in sweep at most once per local day across Codex tasks."""
+    project_roots = tuple(project_roots)
+    if not project_roots:
+        raise ValueError("daily Cache sweep requires at least one verified project root")
     state = _daily_sweep_state_path()
     artifacts._check_ancestors(state.parent)
     state.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -1513,7 +1593,7 @@ def sweep_once_per_day(project_roots, task_id, *, budget_seconds=30):
             if stream.read(16) == marker:
                 return {"daily_status": "already-checked", "local_date": today, "applied": False}
             result = sweep(project_roots, task_id, apply=True, budget_seconds=budget_seconds)
-            if result["errors"] and not result["projects"]:
+            if not any("unclassified" in project for project in result["projects"]):
                 return {**result, "daily_status": "pending", "local_date": today}
             stream.seek(0)
             stream.write(marker)
@@ -1611,7 +1691,7 @@ def main():
         if args.command == "daily-status":
             print(json.dumps(daily_sweep_status(), sort_keys=True))
             return 0
-        if not args.project_root and not args.once_per_day:
+        if not args.project_root:
             raise ValueError("this command requires --project-root")
         if args.requested_only and args.command != "checkpoint":
             raise ValueError("--requested-only applies only to checkpoint")
@@ -1661,8 +1741,14 @@ def main():
                                        artifact_root=args.artifact_root, budget_seconds=args.budget_seconds)
         else:
             result = checkpoint(args.project_root, args.task_id, artifact_root=args.artifact_root, phase=args.phase, current_run=args.current_run, obsolete_runs=args.obsolete_run, apply=args.apply, budget_seconds=args.budget_seconds, requested_only=args.requested_only)
+            if args.phase == "start" and args.apply:
+                result["cleanup_after_idle_seconds"] = STALE_SECONDS
+                try:
+                    result["daily_sweep"] = daily_sweep_status()
+                except (OSError, ValueError) as error:
+                    result["daily_sweep"] = {"daily_status": "pending", "reason": str(error)}
         print(json.dumps(result, sort_keys=True))
-        return 2 if any(item.get("action") == "pending" for item in result.get("results", [])) else 0
+        return 2 if result.get("requested_complete") is False or any(item.get("action") == "pending" for item in result.get("results", [])) else 0
     except (OSError, ValueError, KeyError) as error:
         print(json.dumps({"status": "error", "reason": str(error)}), file=sys.stderr)
         return 2
