@@ -10,7 +10,6 @@ import tempfile
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -461,60 +460,45 @@ class TaskCacheCleanupTests(ProjectCacheTestCase):
         self.assertEqual(receipt["directories_deleted"], 1, receipt)
         self.assertFalse(legacy.exists())
 
-    def test_daily_sweep_runs_at_first_task_and_skips_missed_days(self):
-        first = self.run_root("first-build")
-        later = self.run_root("later-build")
-        state = self.root / "daily-state" / "cache-sweep-day"
-        cleanup.touch_run(self.project, "first-build", first, state="complete")
-
-        with mock.patch.object(cleanup, "_daily_sweep_state_path", return_value=state), mock.patch.object(cleanup, "date") as clock, mock.patch.object(cleanup, "probe_activity", return_value={"safe": True}):
-            clock.today.return_value = date(2026, 11, 20)
-            self.assertEqual(cleanup.daily_sweep_status()["daily_status"], "due")
-            with self.assertRaisesRegex(ValueError, "at least one verified project root"):
-                cleanup.sweep_once_per_day([], "first-task")
-            empty_sweep = ["cleanup", "sweep", "--once-per-day", "--apply", "--task-id", "first-task"]
-            with mock.patch.object(sys, "argv", empty_sweep), contextlib.redirect_stderr(io.StringIO()) as error:
-                self.assertEqual(cleanup.main(), 2)
-            self.assertIn("requires --project-root", error.getvalue())
-            self.assertFalse(state.exists())
-            starter = self.root / "startup-project"
-            starter.mkdir()
-            startup = ["cleanup", "checkpoint", "--project-root", str(starter), "--task-id", "first-task", "--phase", "start", "--apply"]
-            with mock.patch.object(sys, "argv", startup), contextlib.redirect_stdout(io.StringIO()) as output:
+    def test_recent_countdown_waits_once_and_calendar_entrypoints_are_inert(self):
+        countdown = ["cleanup", "recent-countdown", "--task-id", "current-chat", "--delay-seconds", "0.1"]
+        environment = {name: str(self.root) for name in ("LOCALAPPDATA", "XDG_STATE_HOME")}
+        with mock.patch.object(Path, "home", return_value=self.root), mock.patch.dict(os.environ, environment):
+            before = set(self.root.rglob("*"))
+            start = time.monotonic()
+            with mock.patch.object(sys, "argv", countdown), contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(cleanup.main(), 0)
-            startup_report = json.loads(output.getvalue())
-            self.assertEqual(startup_report["daily_sweep"]["daily_status"], "due")
-            self.assertEqual(startup_report["cleanup_after_idle_seconds"], 48 * 3600)
-            self.assertFalse(state.exists())
-            missing = cleanup.sweep_once_per_day([self.root / "unavailable"], "first-task")
-            self.assertEqual(missing["daily_status"], "pending", missing)
-            self.assertEqual(cleanup.daily_sweep_status()["daily_status"], "due")
+            self.assertGreaterEqual(time.monotonic() - start, 0.1)
+            self.assertEqual(json.loads(output.getvalue()), {"status": "ready", "task_id": "current-chat", "delay_seconds": 0.1})
+            stale_sweep = ["cleanup", "sweep", "--once-per-day", "--project-root", str(self.project), "--task-id", "current-chat", "--apply"]
+            for command in (stale_sweep, ["cleanup", "daily-status"]):
+                with mock.patch.object(sys, "argv", command), contextlib.redirect_stderr(io.StringIO()) as error:
+                    self.assertEqual(cleanup.main(), 2)
+                self.assertIn("calendar sweep retired", error.getvalue())
+            self.assertEqual(set(self.root.rglob("*")), before)
 
-            with state.open("r+b") as stream:
-                cleanup._native_file_lock(stream, True)
-                try:
-                    running = cleanup.sweep_once_per_day([self.project], "concurrent-task")
-                    self.assertEqual(running["daily_status"], "in-progress", running)
-                    self.assertTrue(first.exists())
-                finally:
-                    cleanup._native_file_lock(stream, False)
-
-            receipt = cleanup.sweep_once_per_day([self.project], "first-task")
-            self.assertEqual(receipt["directories_deleted"], 1, receipt)
-            self.assertEqual(receipt["local_date"], "2026-11-20")
-            self.assertFalse(first.exists())
-
-            cleanup.touch_run(self.project, "later-build", later, state="complete")
-            skipped = cleanup.sweep_once_per_day([self.project], "same-day-task")
-            self.assertEqual(skipped["daily_status"], "already-checked", skipped)
-            self.assertTrue(later.exists())
-
-            clock.today.return_value = date(2026, 11, 24)
-            self.assertEqual(cleanup.daily_sweep_status()["daily_status"], "due")
-            receipt = cleanup.sweep_once_per_day([self.project], "next-task-after-days-away")
-            self.assertEqual(receipt["directories_deleted"], 1, receipt)
-            self.assertFalse(later.exists())
-            self.assertEqual(state.read_text(encoding="ascii"), "2026-11-24\n")
+    @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "native POSIX activity check")
+    def test_recent_run_inspection_is_read_only_and_uses_exact_ownership(self):
+        if not shutil.which("lsof") or not shutil.which("ps"):
+            self.skipTest("native probes unavailable")
+        candidate = self.run_root("recent-completed")
+        other = self.run_root("active-other-task")
+        (candidate / "output.bin").write_bytes(b"consumed")
+        cleanup.touch_run(self.project, "recent-completed", candidate, state="complete")
+        record = self.record_path(candidate).read_bytes()
+        with mock.patch.object(cleanup, "_lock", side_effect=AssertionError("inspection cannot write a lock")):
+            result = self.finish_when_native_readers_close(candidate, lambda: {"results": [cleanup.inspect_run(self.project, "recent-completed", candidate)]})["results"][0]
+            self.assertEqual((result["action"], result["state"], result["applied"], result["bytes"]), ("eligible", "complete", False, 8))
+            with self.assertRaisesRegex(ValueError, "exact project/task/run"):
+                cleanup.inspect_run(self.project, "recent-completed", other)
+            with self.assertRaisesRegex(ValueError, "inside its project's Cache"):
+                cleanup.inspect_run(self.project, "recent-completed", self.project / "Assets")
+            missing = cleanup.inspect_run(self.project, "recent-completed", self.base / "temp-closed")
+            self.assertEqual(missing["action"], "absent")
+            self.assertIsNone(missing["state"])
+        self.assertEqual(self.record_path(candidate).read_bytes(), record)
+        self.assertEqual((candidate / "output.bin").read_bytes(), b"consumed")
+        self.assertTrue(other.exists())
 
     @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "native POSIX activity check")
     def test_case_alias_scan_and_cleanup_use_existing_native_owner(self):

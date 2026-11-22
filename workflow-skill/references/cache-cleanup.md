@@ -91,21 +91,20 @@ Before deletion, inspect native Codex project/chat status with `list_threads`, `
 
 Treat paused, failed, resuming, approval-waiting or unknown runs as protected only where actual recovery or active-use needs remain. If a candidate's consumers cannot be established, retain that candidate and report the gap; continue other eligible runs, including in the same project/chat. Do not stop active jobs, close user apps, interrupt chats or wait for the whole project to finish to release an independent completed run.
 
-## Daily multi-project sweep
+## Startup countdown for recent tasks
 
-An applied `checkpoint --phase start` includes the read-only `daily_sweep` status before new work. Use `daily-status` for an opted-in local request without a project checkpoint. The user-level Codex `developer_instructions` setting can require those checks on resumed or projectless requests. On `due`, verify at least one local project root from the project and chat inventory or authorized discovery, then run the sweep before implementation or temporary allocations. Honor read-only and hold boundaries and complete native owner preflights for protected projects. On `already-checked`, continue directly.
+When the user opts in, use the user-level Codex `developer_instructions` setting to start one countdown per real local task start or resume, including a projectless request. Start it inside that request after any required project admission. The default delay is 60 elapsed seconds and can be set with `--delay-seconds`. Keep the exact running command handle in the active task and continue independent work. On `ready`, inspect recent task receipts once and close the countdown handle. Finish the review in the same request.
 
 ```text
-python task_cache_cleanup.py daily-status
-python task_cache_cleanup.py sweep --once-per-day --task-id TASK --project-root PROJECT_A --project-root PROJECT_B --apply
-python task_cache_cleanup.py sweep --task-id TASK --project-root PROJECT_A --project-root PROJECT_B --apply
+python task_cache_cleanup.py recent-countdown --task-id CURRENT_TASK --delay-seconds 60
+python task_cache_cleanup.py inspect-run --project-root PROJECT --task-id REGISTERED_TASK --run-root EXACT_RUN
 ```
 
-`--once-per-day` holds a host-local native lock during the sweep. The command requires at least one explicit root and writes the local date only after a project checkpoint returns an inventory result. If every selected root is unavailable, the day remains due. A checked day can still have pending resources. Read and report those owners from the sweep result. Concurrent tasks receiving `in-progress` can continue their own work. Use the ordinary manual sweep for an explicitly requested extra pass.
+After the countdown, use the Codex chat inventory and [recent task evidence](ending-resource-audit.md#select-by-purpose) to select up to ten relevant local chats. Read their actual tool receipts to bind each run path and producer to its owning task and verified outcome. Use the registered task identifier even when it differs from the chat identifier. Group related results by recent task. Verify payload and registration absence for closed work, report disposable leftovers with their exact paths and reasons, and keep active work, user holds and current recovery inputs protected. Report an unknown owner or unavailable readback as pending.
 
-The sweep applies the same native checkpoint to each project and reads back the remaining Cache entries, including legacy folders such as `Cache/temp` even where a registry was never created. Check `directories_deleted`, `bytes_deleted`, and `pending_count`. `unclassified`, `violations`, and `remote_review` identify the exact candidates that need producer and owner evidence. An empty deletion set is a valid result. The sweep uses the original task registries and leaves cross-project AI-index guidance outside its write scope. Refresh the current project's own Cache index through its ordinary checkpoint.
+`inspect-run` checks one run read-only. `eligible` includes measured bytes after the native guards pass. `absent` with a registered `state` still has a ledger entry. `pending` reports missing ownership or the exact guard that prevented classification. Treat `eligible` as current evidence for the audit. Any authorized deletion needs a fresh apply checkpoint. Keep the review within those receipts and use the owning tool for non-Cache resources. The countdown has no calendar state and runs only for the active request.
 
-For unregistered build stages, exports and temporary folders, verify the producer, latest descendant activity, and final handoff or retirement before adopting the exact disposable run through `register`. Pass `--skip-cache-index` when registering for a multi-project sweep and apply the sweep immediately. Explicitly retained outputs and live consumers stay with their native owners. Report verified removals and exact unresolved risks, then finish the sweep so ordinary work can continue.
+For an explicitly requested project-wide cleanup, use the manual `sweep --task-id TASK --project-root PROJECT_A --project-root PROJECT_B --apply`. Read back `directories_deleted`, `bytes_deleted`, `pending_count`, and the owner-review entries. Verify the original producer and its handoff before registering unregistered support. Use `--skip-cache-index` for registration in another selected project and keep reference indexes outside that sweep.
 
 ## Traverse and delete eligible temporary directories
 

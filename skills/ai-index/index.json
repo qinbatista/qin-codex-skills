@@ -129,7 +129,14 @@
           "file": "workflow-skill/scripts/task_cache_cleanup.py",
           "symbol": "sweep",
           "anchor": "def sweep(project_roots, task_id, *, apply=False, budget_seconds=30):",
-          "summary": "Run guarded checkpoints for verified project identities. Applied startup exposes daily status, and the daily sweep records the date only after a project check."
+          "summary": "Run guarded checkpoints for explicitly selected project identities."
+        },
+        {
+          "id": "cache-recent-task-inspection",
+          "file": "workflow-skill/scripts/task_cache_cleanup.py",
+          "symbol": "inspect_run",
+          "anchor": "def inspect_run(project_root, task_id, run_root, *, budget_seconds=30):",
+          "summary": "Inspect an exact run from a recent task receipt after the startup countdown. Read native consumer and eligibility results without writing or deleting."
         },
         {
           "id": "cache-retention-contract-test",
