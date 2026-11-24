@@ -1,6 +1,6 @@
 ---
 name: workflow-skill
-description: "Coordinate parallel work, Monitor Mode, bounded verification and resource cleanup. Use for requested Cache/temp-* cleanup of one project, all Codex projects or the whole computer; plan file disposal before work and clean each delivered unit immediately."
+description: "Coordinate parallel work, Monitor Mode and bounded verification. Release task-owned CPU/GPU work, RAM, GPU memory, disk, connections and applications as steps finish. Also use for requested Cache/temp-* cleanup of one project, all Codex projects or the whole computer."
 ---
 
 # Workflow
@@ -9,7 +9,7 @@ Before implementation or payload writes, make the [unit cleanup plan](references
 
 Allocate fresh producer-owned `Cache/temp-<task-key>-<run-id>/` scratch from the first write of each request or test/build/package/deploy unit. A requested generator's required Cache is in scope. Keep receiving-project output and tests in their own project Cache. Write intermediates and test output directly to the new run, including for producers in `remote-*`. Reserve `Cache/remote-*` for exact files in a Git-tracked contract with a lasting consumer and verified synchronization route. Default uncertain output to `temp-*`.
 
-Before payload writes, record the workspace baseline and producer runs. Share exact ownership with dependent tools and delegates. Track paths and handles for the [task leftover check](references/ending-resource-audit.md#check-and-reclaim-task-leftovers).
+Task completion includes releasing the resources the task acquired. From preparation onward, keep the exact handles of owned jobs, processes, allocations, tabs and files. Share ownership with dependent tools and delegates. [Clean up each step](references/task-resource-lifecycle.md#clean-up-each-step) when its last consumer finishes. Before reporting completion, use the [final leftover check](references/ending-resource-audit.md#check-and-reclaim-task-leftovers) to verify release or name the remaining owner and reason.
 
 Apply [Task Analyze](../task-analyze-skill/SKILL.md) for naming, the opening brief and [action completion](../task-analyze-skill/SKILL.md#complete-action-requests) through verification and delivery. Track actual Skill use across branches for [one final report](../task-analyze-skill/SKILL.md#mandatory-visible-skill-reporting).
 
@@ -31,7 +31,7 @@ Start ready independent work through concurrent tools or authorized subagents wi
 
 Prefer completion events. Use bounded checks with backoff while independent work proceeds. If a check budget expires or a client stays stale, record the job, latest authoritative state and next recovery action. Continue through service status, a supported wait or another viable recovery path. Check existing submissions before retrying. Apply Task Analyze's blocker rule once no useful authorized action remains.
 
-An authoritative receipt proves submission. When submission is the endpoint, use at most one immediate and one bounded final readback. For backend completion, follow the job to its authoritative final state and verify its output. Gate dependents on their actual acceptance, byte verification and authorization requirements. Release unused owned tabs at final cleanup.
+An authoritative receipt proves submission. When submission is the endpoint, use at most one immediate and one bounded final readback. For backend completion, follow the job to its authoritative final state and verify its output. Gate dependents on their actual acceptance, byte verification and authorization requirements. Release a status tab once another verified route can supply any remaining readback.
 
 ## Monitor Mode
 

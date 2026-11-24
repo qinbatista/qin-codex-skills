@@ -43,7 +43,7 @@ Resolve unambiguous spelling errors in function, feature or task names from auth
 
 Run [Workflow's cleanup checkpoint](../workflow-skill/references/task-resource-lifecycle.md#task-transition-cleanup-checkpoint) before each request or work unit, at delivery and finish. Reclaim confirmed disposable completed or obsolete support. Check registered abandoned runs and repair in-scope Cache naming violations.
 
-Before implementation, make [Workflow's unit cleanup plan](../workflow-skill/references/project-cache-artifact-policy.md#plan-before-producing-files). Keep support in project Cache from its first write under the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md), including delegated output and tool caches. Release disposable support immediately after each verified and reported result.
+Before implementation, make [Workflow's unit cleanup plan](../workflow-skill/references/project-cache-artifact-policy.md#plan-before-producing-files). Keep support in project Cache from its first write under the [project Cache artifact policy](../workflow-skill/references/project-cache-artifact-policy.md), including delegated output and tool caches. [Release task resources](../workflow-skill/references/task-resource-lifecycle.md#clean-up-each-step) when each step finishes and verify final cleanup before reporting the task complete.
 
 For Git changes, follow [Workflow's branch ownership](../workflow-skill/SKILL.md#git-branch-ownership) at start/resume and its [delivery transaction](../workflow-skill/SKILL.md#execute) after verification. Announce the branch and upstream. Honor explicit read-only, hold, local-only and no-push scope.
 

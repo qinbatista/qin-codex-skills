@@ -298,6 +298,13 @@
           "symbol": "task_artifact_environment",
           "anchor": "def task_artifact_environment(",
           "summary": "Bind exact child TMP/TEMP/TMPDIR and disable Python bytecode writes to source or installed helper folders."
+        },
+        {
+          "id": "preview-cleanup-test",
+          "file": "workflow-skill/tests/test_ending_resource_audit.py",
+          "symbol": "EndingResourceAuditTests.test_runtime_actions_require_owning_tool_and_identity_bound_absence",
+          "anchor": "def test_runtime_actions_require_owning_tool_and_identity_bound_absence(self):",
+          "summary": "Verify a live preview keeps its input, its exit permits scratch removal, and a neighboring file survives."
         }
       ]
     },

@@ -7,7 +7,7 @@ The global pack root is `~/.agents/skills`. The paths in this guide are below th
 | Work | Required entry |
 | --- | --- |
 | Start, scope, resume, or close project work | `qin-codex-skills/task-analyze-skill/SKILL.md` |
-| Coordinate work, tasks, Git delivery, waits, or Cache and resource cleanup | `qin-codex-skills/workflow-skill/SKILL.md` |
+| Coordinate work, Git delivery or waits. Manage task resources from acquisition to release, including compute jobs, memory, research tabs, previews and test folders. | `qin-codex-skills/workflow-skill/SKILL.md` |
 | Write, refactor, repair, or review code and run language-neutral or Python checks | `qin-codex-skills/code-skill/SKILL.md` |
 | Create, edit, or test a reusable prompt or durable AI instructions | `qin-codex-skills/prompt-skill/SKILL.md` |
 | Select verification evidence or verify changed behavior and consequential outputs | `qin-codex-skills/verify-skill/SKILL.md` |

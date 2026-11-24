@@ -1,6 +1,7 @@
 import sys
 import copy
 import json
+import subprocess
 import time
 import unittest
 from pathlib import Path
@@ -9,13 +10,13 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import task_artifact_paths as ARTIFACTS
+import task_cache_cleanup as CACHE
 import ending_resource_audit as AUDIT
 import task_resource_ledger as LEDGER
+sys.path.insert(0, str(SCRIPTS.parents[1] / "code-skill" / "scripts"))
+from hidden_process import hidden_process_options
 sys.path.insert(0, str(SCRIPTS.parents[1] / "management-skill" / "tests"))
 from test_project_cache_artifact_policy import ProjectCacheTestCase
-
-
-HASH = "a" * 64
 
 
 class EndingResourceAuditTests(ProjectCacheTestCase):
@@ -37,8 +38,9 @@ class EndingResourceAuditTests(ProjectCacheTestCase):
         absolute = self.project / path
         absolute.write_text("completed test output", encoding="utf-8")
         LEDGER.seal_path(self.ledger, self.project, resource_id)
-        LEDGER.record_durable_readback(self.ledger, resource_id, HASH)
-        LEDGER.record_consumer_readback(self.ledger, resource_id, self.task_id, HASH)
+        digest = ARTIFACTS._file_sha256(absolute)
+        LEDGER.record_durable_readback(self.ledger, resource_id, digest)
+        LEDGER.record_consumer_readback(self.ledger, resource_id, self.task_id, digest)
         LEDGER.save_ledger(self.ledger_path, self.ledger)
         return absolute
 
@@ -252,24 +254,50 @@ class EndingResourceAuditTests(ProjectCacheTestCase):
         self.assertTrue(target.exists())
 
     def test_runtime_actions_require_owning_tool_and_identity_bound_absence(self):
-        identity = {"pid": 54321, "start_time": "unique-start", "executable": "python", "cwd": str(self.project)}
-        LEDGER.acquire_runtime(self.ledger, "server", "server", identity, "finished test server")
-        LEDGER.record_durable_readback(self.ledger, "server", HASH)
-        LEDGER.record_consumer_readback(self.ledger, "server", self.task_id, HASH)
-        LEDGER.save_ledger(self.ledger_path, self.ledger)
-        result = self.audit([self.decision("server")], apply=True)
-        action = result["resources"][0]
-        self.assertEqual(action["action"], "owner_action_required")
-        self.assertEqual(action["identity"]["pid"], 54321)
-        self.assertFalse(result["root_removed"])
-        invalid = self.audit([self.decision("server")], apply=True, runtime_receipts={"server": {"outcome": "PASS"}})
-        self.assertEqual(invalid["status"], "pending")
-        self.assertTrue(self.ledger_path.exists())
+        scratch = self.ledger_path.parent
+        neighbor = scratch.parent / "user-notes.txt"
+        neighbor.write_bytes(b"keep this file")
+        page = self.file("preview-input")
+        digest = ARTIFACTS._file_sha256(page)
+        program = "import pathlib, sys\nprint(pathlib.Path(sys.argv[1]).read_text(), flush=True)\nsys.stdin.readline()"
+        command = [sys.executable, "-B", "-c", program, page.name]
+        decisions = [self.decision("preview-input"), self.decision("preview")]
+        with subprocess.Popen(command, cwd=scratch, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **hidden_process_options()) as child:
+            try:
+                start_identity = CACHE._process_identity(child.pid)
+                self.assertNotIn(start_identity, (None, "unverified"))
+                identity = {"pid": child.pid, "start_time": start_identity, "executable": sys.executable, "cwd": str(scratch)}
+                LEDGER.acquire_runtime(self.ledger, "preview", "process", identity, "temporary preview of test output")
+                LEDGER.record_durable_readback(self.ledger, "preview", digest)
+                LEDGER.record_consumer_readback(self.ledger, "preview", self.task_id, digest)
+                LEDGER.save_ledger(self.ledger_path, self.ledger)
+
+                result = self.audit(decisions, apply=True)
+                action, backing_file = result["resources"]
+                self.assertEqual(action["action"], "owner_action_required")
+                self.assertEqual(action["identity"]["start_time"], start_identity)
+                self.assertEqual(action["identity"]["pid"], child.pid)
+                self.assertEqual(backing_file["action"], "pending")
+                invalid = self.audit(decisions, apply=True, runtime_receipts={"preview": {"outcome": "PASS"}})
+                self.assertEqual(invalid["status"], "pending")
+                self.assertEqual(ARTIFACTS._file_sha256(page), digest)
+                self.assertIsNone(child.poll())
+
+                output, error = child.communicate(input="close\n", timeout=10)
+                self.assertEqual(child.returncode, 0, error)
+                self.assertEqual(output.rstrip(), page.read_text(encoding="utf-8"))
+                self.assertIsNone(CACHE._process_identity(child.pid))
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.communicate(timeout=10)
         receipt = {key: action[key] for key in ("ledger_id", "identity_digest", "release_token")}
-        receipt.update(resource_id="server", kind="server", method="graceful", outcome="PASS", observed="exact_handle_absent", owner_tool="controlled owner receipt fixture")
-        completed = self.audit([self.decision("server")], apply=True, runtime_receipts={"server": receipt})
+        receipt.update(resource_id="preview", kind="process", method="graceful", outcome="PASS", observed="exact_handle_absent", owner_tool="subprocess.Popen")
+        completed = self.audit(decisions, apply=True, runtime_receipts={"preview": receipt})
         self.assertEqual(completed["status"], "complete")
         self.assertTrue(completed["root_removed"])
+        self.assertFalse(scratch.exists())
+        self.assertEqual(neighbor.read_bytes(), b"keep this file")
 
 
 if __name__ == "__main__":
