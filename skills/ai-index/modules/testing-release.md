@@ -6,6 +6,8 @@ The project testing Skill owns the opt-in [Codex Python writing cases](../../../
 
 The [resource ledger tests](../../../workflow-skill/tests/test_task_resource_ledger.py) replace an ownership marker with a distinct file carrying the original bytes and timestamp.
 
+[Verify's ordinary-task examples](../../../verify-skill/references/task-cleanup-examples.md) cover two research tabs with a loopback CLI preview and a failing JSON command. The observer checks live output, native closure, control survival and scratch registration.
+
 Each global Skill's clean-clone tests stay in that Skill's `tests/`. Project-only tests stay under the project testing Skill. Consolidate by purpose before adding cases; retain distinct compatibility and release coverage. Apply [verification rules](../rules/verification.md).
 
 The [GitHub Actions validation matrix](../../../.github/workflows/ci.yml) tests Python 3.10 and 3.11 on `ubuntu-latest`. Python 3.10 covers the existing syntax floor for the host scripts, including structural pattern matching in platform dispatch. `candidate_layouts` includes the workflow in the isolated source layout so the project AI index can validate its ownership and links.

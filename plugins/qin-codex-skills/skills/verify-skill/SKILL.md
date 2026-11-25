@@ -36,6 +36,8 @@ Use one real path through the affected behavior or actual output. Use syntax che
 
 For browser-based verification, read and apply [Workflow's browser testing policy](../workflow-skill/SKILL.md#browser-testing).
 
+When asked to demonstrate automatic task cleanup, use the [ordinary-task examples](references/task-cleanup-examples.md). They let an observer check a real result while its inputs are live and check what remains after the worker finishes.
+
 Use [portable, quiet execution](../code-skill/references/skill-platform-compatibility.md) for hidden subprocesses, native headless rendering and captured output. Preserve platform branches and report the ones actually tested.
 
 ## Bind evidence to the actual target

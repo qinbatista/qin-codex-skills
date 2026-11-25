@@ -11,6 +11,8 @@ For a requested Level 2 check of Codex-written Python, run the [writing cases](r
 
 Replay the [Git closeout case](references/git-closeout.md) to check account scope, worktree base, branch deletion and same-named tag retention with local remotes.
 
+Use Verify's [ordinary-task cleanup examples](../../../verify-skill/references/task-cleanup-examples.md) for an end-to-end trial with a fresh worker and a separate observer.
+
 To test [per-step browser cleanup](../../../workflow-skill/references/task-resource-lifecycle.md#clean-up-each-step), list the initial built-in browser tab IDs. Open a hidden control tab, then open two hidden research tabs with identical URLs. Close the research tabs by their returned handles and verify both IDs are absent while the control and pre-existing tabs remain. Close the control and verify all three test IDs are absent. Release test handles on failure too. Record a provider limitation if the built-in browser or its close/readback operation is unavailable.
 
 For compute cleanup, run a bounded workload in an isolated worker, touch its memory allocation, then wait for verified exit and check its process identity. For a GPU check, submit a small device operation, verify its output and completion, release the buffer and compare the runtime's allocation counter with its baseline. Record the hardware, runtime and measured scope. Close all probe handles and remove its registered scratch.
