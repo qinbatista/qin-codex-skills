@@ -57,7 +57,7 @@ def external_fixture(task_name="external-policy-test", *, cache_root=None):
     finally:
         if not configured and task_root is not None:
             cleanup = ARTIFACTS.task_cache_cleanup
-            result = cleanup.checkpoint(SKILLS_ROOT, task_id, phase="finish", current_run=task_root, apply=True, budget_seconds=5, requested_only=True)
+            result = cleanup.checkpoint(SKILLS_ROOT, task_id, phase="finish", current_run=task_root, apply=True, requested_only=True)
             record = cleanup._registry(task_root.parent, SKILLS_ROOT) / "runs" / (cleanup._key(task_root) + ".json")
             if not result.get("requested_complete") or task_root.exists() or record.exists():
                 own = [item for item in result["results"] if item.get("path") == str(task_root) or item.get("record") == str(record)]

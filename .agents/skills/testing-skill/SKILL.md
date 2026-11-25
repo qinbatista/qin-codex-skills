@@ -9,6 +9,8 @@ Read [the test registry](references/test-registry.json) before adding a maintain
 
 For a requested Level 2 check of Codex-written Python, run the [writing cases](references/codex-python-writing.md). Each independent answer faces real CSV, pagination or SQLite failure cases.
 
+Use the [parcel CLI replay](references/module-boundaries.md) to check whether a second maintainer can find and change one feature while its sibling keeps the same source and behavior.
+
 Replay the [Git closeout case](references/git-closeout.md) to check account scope, worktree base, branch deletion and same-named tag retention with local remotes.
 
 Use Verify's [ordinary-task cleanup examples](../../../verify-skill/references/task-cleanup-examples.md) for an end-to-end trial with a fresh worker and a separate observer.

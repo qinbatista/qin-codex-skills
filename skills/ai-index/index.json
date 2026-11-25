@@ -636,7 +636,7 @@
           "file": "management-skill/tests/test_project_cache_artifact_policy.py",
           "symbol": "external_fixture",
           "anchor": "def external_fixture(task_name=\"external-policy-test\", *, cache_root=None):",
-          "summary": "Own per-case project Cache lifecycle or borrow a caller owner; close exact registered roots after callbacks, errors, timeout and cancellation."
+          "summary": "Borrow the caller's Cache or close the fixture's exact registered root with the native checkpoint's standard time budget after success, failure, timeout or cancellation."
         },
         {
           "id": "publication-gate-owner",
